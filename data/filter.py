@@ -10,6 +10,8 @@ from data.exceptions import InvalidFilterError
 
 @dataclass
 class ResourceFilter:
+    user_id: Optional[int] = None
+
     resource_type: Optional[ResourceType] = None
     status: Optional[ResourceStatus] = ResourceStatus.TO_TEACH
     platform: Optional[ResourcePlatform] = None

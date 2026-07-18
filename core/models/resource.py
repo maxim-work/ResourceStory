@@ -3,7 +3,7 @@ from math import log10
 from typing import Optional
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_serializer, field_validator
 
 from config import MAX_URL_LENGTH
 from core.config import RATING_CONFIG
@@ -51,17 +51,77 @@ class Resource(BaseModel):
             raise InvalidParamError("url", v, f"Некорректный URL: {v}")
         return v
 
-    @field_validator("platform", mode="before")
+    @field_validator("resource_type", mode="before")
     @classmethod
-    def coerce_platform(cls, v) -> ResourcePlatform:
+    def coerce_resource_type(cls, v) -> ResourceType:
         if isinstance(v, str):
             try:
-                return ResourcePlatform.from_code(v)
+                return ResourceType.from_code(v)
             except UnknownClassCodeError:
-                return ResourcePlatform.OTHER
+                return ResourceType.OTHER
+        if not isinstance(v, ResourceType):
+            raise TypeError(
+                f"resource_type должен быть ResourceType — принято: {type(v).__name__}"
+            )
+        return v
+
+    @field_validator("platform", mode="before")
+    @classmethod
+    def coerce_and_detect_platform(cls, v, info: ValidationInfo) -> ResourcePlatform:
+        if isinstance(v, str):
+            try:
+                v = ResourcePlatform.from_code(v)
+            except UnknownClassCodeError:
+                v = ResourcePlatform.OTHER
+
         if not isinstance(v, ResourcePlatform):
             raise TypeError(
                 f"platform должна быть ResourcePlatform — принято: {type(v).__name__}"
+            )
+
+        if v == ResourcePlatform.OTHER:
+            url = info.data.get("url") if info.data else None
+            if url:
+                detected = detect_platform(url)
+                if detected in ("youtube", "habr"):
+                    return ResourcePlatform.from_code(detected)
+
+        return v
+
+    @field_validator("kind", mode="before")
+    @classmethod
+    def coerce_and_detect_kind(cls, v, info: ValidationInfo) -> ResourceKind:
+        if isinstance(v, str):
+            try:
+                v = ResourceKind.from_code(v)
+            except UnknownClassCodeError:
+                v = ResourceKind.OTHER
+
+        if not isinstance(v, ResourceKind):
+            raise TypeError(
+                f"kind должен быть ResourceKind — принято: {type(v).__name__}"
+            )
+
+        if v == ResourceKind.OTHER:
+            platform = info.data.get("platform") if info.data else None
+            if platform == ResourcePlatform.YOUTUBE:
+                return ResourceKind.VIDEO
+            elif platform == ResourcePlatform.HABR:
+                return ResourceKind.ARTICLE
+
+        return v
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def coerce_status(cls, v) -> ResourceStatus:
+        if isinstance(v, str):
+            try:
+                return ResourceStatus.from_code(v)
+            except UnknownClassCodeError:
+                return ResourceStatus.TO_TEACH
+        if not isinstance(v, ResourceStatus):
+            raise TypeError(
+                f"status должна быть ResourceStatus — принято: {type(v).__name__}"
             )
         return v
 
@@ -101,27 +161,9 @@ class Resource(BaseModel):
             )
         return v
 
-    @field_validator("platform")
-    @classmethod
-    def detect_and_set_platform(cls, v: ResourcePlatform, info) -> ResourcePlatform:
-        url = info.data.get("url")
-        if v == ResourcePlatform.OTHER and url:
-            detected = detect_platform(url)
-            if detected in ("youtube", "habr"):
-                return ResourcePlatform.from_code(detected)
-        return v
-
-    @field_validator("kind")
-    @classmethod
-    def detect_and_set_kind(cls, v: ResourceKind, info) -> ResourceKind:
-        if v != ResourceKind.OTHER:
-            return v
-        platform = info.data.get("platform")
-        if platform == ResourcePlatform.YOUTUBE:
-            return ResourceKind.VIDEO
-        elif platform == ResourcePlatform.HABR:
-            return ResourceKind.ARTICLE
-        return v
+    @field_serializer("resource_type", "platform", "kind", "status")
+    def serialize_enum(self, value):
+        return value.code
 
     def update_stats(
         self, views: Optional[int] = None, engagement: Optional[int] = None

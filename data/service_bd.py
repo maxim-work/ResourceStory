@@ -27,12 +27,13 @@ class Database:
                 cursor = conn.execute(
                     """
                     INSERT INTO resources (
-                        title, description, resource_type, platform, kind, external_id, url,
+                        user_id, title, description, resource_type, platform, kind, external_id, url,
                         status, tags, my_notes, my_rating, engagement, views,
                         duration, published_at, completed_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
+                        resource.user_id or 1,
                         resource.title,
                         resource.description,
                         resource.resource_type.code,
@@ -128,11 +129,12 @@ class Database:
                 try:
                     conn.execute(
                         """INSERT INTO resources
-                        (title, url, description, resource_type, platform, kind,
+                        (user_id, title, url, description, resource_type, platform, kind,
                             external_id, status, tags, my_notes, my_rating,
                             engagement, views, duration, published_at, completed_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                         (
+                            resource.user_id or 1,
                             resource.title,
                             resource.url,
                             resource.description,
@@ -166,6 +168,10 @@ class Database:
     def _get_candidates(self, f: ResourceFilter) -> list[Resource]:
         query = "SELECT * FROM resources WHERE 1=1"
         params: list = []
+
+        if f.user_id is not None:
+            query += " AND user_id = ?"
+            params.append(f.user_id)
 
         if f.resource_type is not None:
             query += " AND resource_type = ?"
@@ -202,6 +208,7 @@ class Database:
     def _row_to_resource(self, row) -> Resource:
         return Resource(
             id=row["id"],
+            user_id=row["user_id"],
             title=row["title"],
             description=row["description"],
             resource_type=ResourceType.from_code(row["resource_type"]),
