@@ -12,7 +12,7 @@ from core.exceptions import (
     ResourceNotFoundError,
 )
 from core.models.resource import ResourceKind, ResourceStatus, ResourceType
-from core.service import create_resource
+from core.service import ResourceService
 from data.exceptions import (
     DuplicateResourceError,
     EmptyDatabaseError,
@@ -113,7 +113,8 @@ def add_video_cli(db, clear, pause):
     proxy = "127.0.0.1:10809" if proxy_input.lower() == "d" else (proxy_input or None)
 
     try:
-        resource = create_resource(
+        resource = ResourceService.create_resource(
+            user_id=1,
             url=url,
             resource_type=resource_type,
             kind=kind,

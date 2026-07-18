@@ -16,23 +16,25 @@ class User(BaseModel):
     first_name: str
     last_name: Optional[str] = None
     is_active: bool = True
-    created_at: datetime = Field(default_factory=datetime.now)
     last_active_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=datetime.now)
 
     @field_validator("tg_id")
     @classmethod
     def validate_tg_id(cls, v: int) -> int:
         if not v:
-            raise ValueError("tg_id обязателен")
-        if v <= 0:
-            raise ValueError(f"tg_id должен быть положительным числом: {v}")
+            raise InvalidParamError("tg_id", str(v), "tg_id обязателен")
+        if v < 2000000:
+            raise InvalidParamError(
+                "tg_id", str(v), "tg id не может быть меньше 2 000 000"
+            )
         return v
 
     @field_validator("first_name")
     @classmethod
     def first_name_must_not_be_empty(cls, v: str) -> str:
         if not v:
-            raise InvalidParamError("first_name", str(v), "first_name обязательно")
+            raise InvalidParamError("first_name", v, "first_name обязательно")
         return v
 
     @property
@@ -42,12 +44,9 @@ class User(BaseModel):
         return self.first_name
 
     def update(self, username=None, first_name=None, last_name=None) -> None:
-        if username:
-            self.username = username
-        if first_name:
-            self.first_name = first_name
-        if last_name:
-            self.last_name = last_name
+        self.username = username or self.username
+        self.first_name = first_name or self.first_name
+        self.last_name = last_name or self.last_name
 
     def deactivate(self) -> None:
         self.is_active = False
