@@ -160,12 +160,12 @@ def fetch_page_info(
     # tags
     if platform == "habr":
         meta_keywords = soup.find("meta", attrs={"name": "keywords"})
-        if meta_keywords and meta_keywords.get("content"):
-            info["tags"] = [
-                t.strip().lower()
-                for t in meta_keywords["content"].split(",")
-                if t.strip()
-            ]
+        if meta_keywords:
+            content = meta_keywords.get("content")
+            if content and isinstance(content, str):
+                info["tags"] = [
+                    t.strip().lower() for t in content.split(",") if t.strip()
+                ]
         if not info.get("tags", 0):
             hubs = soup.find_all(class_="tm-publication-hubs__hub")
             info["tags"] = []
@@ -175,30 +175,35 @@ def fetch_page_info(
                     info["tags"].append(text.lower())
     else:
         meta_keywords = soup.find("meta", attrs={"name": "keywords"})
-        if meta_keywords and meta_keywords.get("content"):
-            info["tags"] = [
-                t.strip().lower()
-                for t in meta_keywords["content"].split(",")
-                if t.strip()
-            ]
+        if meta_keywords:
+            content = meta_keywords.get("content")
+            if content and isinstance(content, str):
+                info["tags"] = [
+                    t.strip().lower() for t in content.split(",") if t.strip()
+                ]
 
     # published_at
     time_tag = soup.find("time", datetime=True)
-    if time_tag and time_tag.get("datetime"):
-        try:
-            info["published_at"] = datetime.fromisoformat(
-                time_tag["datetime"].replace("Z", "+00:00")
-            )
-        except ValueError:
-            pass
+    if time_tag:
+        dt_str = time_tag.get("datetime")
+        if isinstance(dt_str, str):
+            try:
+                info["published_at"] = datetime.fromisoformat(
+                    dt_str.replace("Z", "+00:00")
+                )
+            except ValueError:
+                pass
 
     # from JSON-LD or PINIA(duration, engagement, views)
     try:
         pinia_script = soup.find(
-            "script", string=lambda t: t and "window.__PINIA_STATE__" in t
+            "script",
+            string=lambda t: isinstance(t, str) and "window.__PINIA_STATE__" in t,
         )
         if pinia_script:
             raw = pinia_script.string
+            if not isinstance(raw, str):
+                raise ParseError("PINIA script has no string content")
             start = raw.index("window.__PINIA_STATE__=") + len(
                 "window.__PINIA_STATE__="
             )

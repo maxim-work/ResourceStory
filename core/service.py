@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional
 
 from core.exceptions import InvalidUrlParamError, UnknownClassCodeError
-from core.models import (
+from core.models.resource import (
     Resource,
     ResourceKind,
     ResourcePlatform,

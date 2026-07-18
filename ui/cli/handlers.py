@@ -11,7 +11,7 @@ from core.exceptions import (
     ProxyRequestError,
     ResourceNotFoundError,
 )
-from core.models import ResourceKind, ResourceStatus, ResourceType
+from core.models.resource import ResourceKind, ResourceStatus, ResourceType
 from core.service import create_resource
 from data.exceptions import (
     DuplicateResourceError,

@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 from config import EXPORT_DIR
-from core.models import Resource
+from core.models.resource import Resource
 
 
 def write_urls_file(urls: list[str], filename: str = "urls.txt") -> tuple[Path, int]:
@@ -22,7 +22,7 @@ def write_data_file(
     EXPORT_DIR.mkdir(parents=True, exist_ok=True)
     filepath = EXPORT_DIR / filename
 
-    serialized = [r.to_dict() for r in data]
+    serialized = [r.model_dump(mode="json") for r in data]
 
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(serialized, f, ensure_ascii=False, indent=2)

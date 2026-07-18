@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Optional, cast
 
 from core.enum import ResourcePlatform
-from core.models import Resource, ResourceKind, ResourceStatus, ResourceType
+from core.models.resource import Resource, ResourceKind, ResourceStatus, ResourceType
 from data.exceptions import InvalidFilterError
 
 

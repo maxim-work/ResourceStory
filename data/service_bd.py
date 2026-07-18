@@ -3,7 +3,7 @@ import sqlite3
 from datetime import datetime
 from typing import Optional
 
-from core.models import (
+from core.models.resource import (
     Resource,
     ResourceKind,
     ResourcePlatform,
