@@ -27,8 +27,8 @@ from core.utils import (
 class ResourceService:
     @staticmethod
     def create_resource(
-        user_id: int,
         url: str,
+        user_id: int,
         resource_type: ResourceType = ResourceType.OTHER,
         kind: Optional[ResourceKind] = None,
         user_tags: Optional[list[str]] = None,
@@ -36,6 +36,54 @@ class ResourceService:
         proxy: Optional[str] = None,
         proxy_type: str = "socks5",
     ) -> Resource:
+        info = ResourceService.get_info_for_url(url, youtube_api_key, proxy, proxy_type)
+        return Resource(
+            user_id=user_id,
+            title=info["title"],
+            description=info["description"],
+            platform=info["platform_enum"],
+            kind=kind or info["kind"],
+            external_id=info["external_id"],
+            url=info["url"],
+            resource_type=resource_type,
+            tags=user_tags or info["tags"],
+            engagement=info["engagement"],
+            views=info["views"],
+            duration=info["duration"],
+            published_at=info["published_at"],
+        )
+
+    @staticmethod
+    def edit_resource(
+        resource: Resource,
+        resource_type: Optional[ResourceType] = None,
+        kind: Optional[ResourceKind] = None,
+        status: Optional[ResourceStatus] = None,
+        my_notes: Optional[str] = None,
+        my_rating: Optional[int] = None,
+        completed_at: Optional[datetime] = None,
+    ) -> Resource:
+        if resource_type is not None:
+            resource.update_type(resource_type)
+        if kind is not None:
+            resource.update_kind(kind)
+        if status is not None:
+            resource.update_status(status)
+        if my_notes is not None:
+            resource.update_my_notes(my_notes)
+        if my_rating is not None:
+            resource.update_my_rating(my_rating)
+        if completed_at is not None and resource.status != ResourceStatus.TO_TEACH:
+            resource.completed_at = completed_at
+        return resource
+
+    @staticmethod
+    def get_info_for_url(
+        url: str,
+        youtube_api_key: Optional[str] = None,
+        proxy: Optional[str] = None,
+        proxy_type: str = "socks5",
+    ):
         info = None
         external_id = None
 
@@ -64,62 +112,37 @@ class ResourceService:
             info = fetch_youtube_video_info(
                 external_id, youtube_api_key, proxy, proxy_type
             )
-            kind = kind or ResourceKind.VIDEO
+            kind = ResourceKind.VIDEO
         elif platform == "habr":
             info = fetch_page_info(
                 url, platform="habr", proxy=proxy, proxy_type=proxy_type
             )
-            kind = kind or ResourceKind.ARTICLE
+            kind = ResourceKind.ARTICLE
         else:
             info = fetch_page_info(url, proxy=proxy, proxy_type=proxy_type)
-            kind = kind or ResourceKind.SITE
+            kind = ResourceKind.SITE
 
         if not info:
             raise InvalidUrlParamError(
                 "info", url, f"Не получилось получить информацию по url({url})"
             )
-
         try:
             platform_enum = ResourcePlatform.from_code(platform)
         except UnknownClassCodeError:
             platform_enum = ResourcePlatform.OTHER
-
-        return Resource(
-            user_id=user_id,
-            title=info["title"],
-            description=info["description"],
-            platform=platform_enum,
-            kind=kind,
-            external_id=external_id,
-            url=url,
-            resource_type=resource_type,
-            tags=user_tags or info["tags"],
-            engagement=info["engagement"],
-            views=info["views"],
-            duration=info["duration"],
-            published_at=info["published_at"],
-        )
-
-    @staticmethod
-    def edit_resource(
-        resource: Resource,
-        resource_type: Optional[ResourceType] = None,
-        status: Optional[ResourceStatus] = None,
-        my_notes: Optional[str] = None,
-        my_rating: Optional[int] = None,
-        completed_at: Optional[datetime] = None,
-    ) -> Resource:
-        if resource_type is not None:
-            resource.update_type(resource_type)
-        if status is not None:
-            resource.update_status(status)
-        if my_notes is not None:
-            resource.update_my_notes(my_notes)
-        if my_rating is not None:
-            resource.update_my_rating(my_rating)
-        if completed_at is not None and resource.status != ResourceStatus.TO_TEACH:
-            resource.completed_at = completed_at
-        return resource
+        return {
+            "title": info["title"],
+            "description": info["description"],
+            "platform_enum": platform_enum,
+            "kind": kind,
+            "external_id": external_id,
+            "url": url,
+            "tags": info["tags"],
+            "engagement": info["engagement"],
+            "views": info["views"],
+            "duration": info["duration"],
+            "published_at": info["published_at"],
+        }
 
 
 class UserService:

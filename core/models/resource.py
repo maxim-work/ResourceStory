@@ -186,6 +186,9 @@ class Resource(BaseModel):
     def update_type(self, new_type: ResourceType):
         self.resource_type = new_type
 
+    def update_kind(self, new_kind: ResourceKind):
+        self.kind = new_kind
+
     def update_my_notes(self, my_note: str):
         self.my_notes = my_note
 
