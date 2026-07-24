@@ -7,16 +7,17 @@ if __name__ == "__main__":
 
     mode = sys.argv[1]
 
-    from data.service_bd import Database
+    from data.service_db import ResourceDB, UserDB
     from data.utils import start_db
 
     start_db()
-    db = Database()
+    db = ResourceDB()
+    user_db = UserDB
 
     if mode == "tg":
         from ui.tg_bot.dispatcher import start_bot
 
-        start_bot()
+        start_bot(user_db)
     elif mode == "cli":
         from ui.cli.cli import start_cli
 

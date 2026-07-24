@@ -16,7 +16,7 @@ class Resource(BaseModel):
     model_config = {"frozen": False}
 
     id: Optional[int] = None
-    user_id: Optional[int] = None
+    tg_id: Optional[int] = None
     title: str
     url: str
     description: Optional[str] = None

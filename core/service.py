@@ -28,7 +28,7 @@ class ResourceService:
     @staticmethod
     def create_resource(
         url: str,
-        user_id: int,
+        tg_id: int,
         resource_type: ResourceType = ResourceType.OTHER,
         kind: Optional[ResourceKind] = None,
         user_tags: Optional[list[str]] = None,
@@ -38,7 +38,7 @@ class ResourceService:
     ) -> Resource:
         info = ResourceService.get_info_for_url(url, youtube_api_key, proxy, proxy_type)
         return Resource(
-            user_id=user_id,
+            tg_id=tg_id,
             title=info["title"],
             description=info["description"],
             platform=info["platform_enum"],

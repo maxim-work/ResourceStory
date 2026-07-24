@@ -1,6 +1,8 @@
 from aiogram import F, Router, types
 from aiogram.filters.command import Command, CommandStart
 
+from core.service import UserService
+
 common_router = Router()
 
 commands_text = "/start — описание\n/help — описание"
@@ -10,6 +12,12 @@ commands_text = "/start — описание\n/help — описание"
 async def cmd_start(message: types.Message) -> None:
     user = message.from_user
     name = user.full_name or user.first_name if user else "Гость"
+    UserService.create_user(
+        tg_id=message.from_user.id,
+        first_name=message.from_user.first_name,
+        username=message.from_user.username,
+        last_name=message.from_user.last_name,
+    )
     await message.answer(f"Привет, {name}!")
 
 
