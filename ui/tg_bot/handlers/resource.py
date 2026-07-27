@@ -4,16 +4,24 @@ import logging
 from aiogram import Bot, F, Router, types
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
+from aiogram.types import Message
 from aiogram.utils.markdown import hbold
 
 from config import PROXY_URL, YOUTUBE_API_KEY
 from core.models.resource import Resource, ResourceKind, ResourceType
 from core.service import ResourceService
+from data.exceptions import DuplicateResourceError
+from data.service_db import ResourceDB
 from ui.tg_bot.callbacks.resource import AddResourceCallback
 from ui.tg_bot.keyboards.resource import create_kb_tags, create_kb_type
 from ui.tg_bot.states.resource import AddResourceState
 from ui.tg_bot.utils.error_handler import handle_resource_error
-from ui.tg_bot.utils.message import auto_delete, safe_delete_many, with_action_label
+from ui.tg_bot.utils.message import (
+    auto_delete,
+    get_editable_message,
+    safe_delete_many,
+    with_action_label,
+)
 
 resource_router = Router()
 
@@ -27,6 +35,9 @@ def pack_callback_data_list(options: list[str]) -> list[str]:
 
 
 async def show_save_summary(callback: types.CallbackQuery, state: FSMContext):
+    message = get_editable_message(callback)
+    if message is None:
+        return
     data = await state.get_data()
     resource = data["resource"]
     msg = (
@@ -37,7 +48,7 @@ async def show_save_summary(callback: types.CallbackQuery, state: FSMContext):
         f"{hbold('Формат:')} {resource.kind.label}\n"
         f"{hbold('Тэги:')} {', '.join(resource.tags) if resource.tags else 'не указаны'}"
     )
-    await callback.message.edit_text(
+    await message.edit_text(
         msg,
         reply_markup=create_kb_tags(
             ["Сохранить", "Изменить", "Отмена"],
@@ -67,6 +78,8 @@ async def process_link(message: types.Message, state: FSMContext, bot: Bot):
         message.message_id,
     )
     link = message.text
+    if link is None:
+        return
     if not Resource._is_valid_url(link):
         error_msg = await message.answer(
             with_action_label("error_add", f"Некорректная ссылка: {link}")
@@ -96,6 +109,9 @@ async def process_link(message: types.Message, state: FSMContext, bot: Bot):
 async def process_type(
     callback: types.CallbackQuery, callback_data: AddResourceCallback, state: FSMContext
 ):
+    message = get_editable_message(callback)
+    if message is None:
+        return
     data = await state.get_data()
     is_edit = data.get("edit_target") == "change_type"
 
@@ -111,7 +127,7 @@ async def process_type(
         await show_save_summary(callback, state)
     else:
         await state.set_state(AddResourceState.waiting_for_format)
-        await callback.message.edit_text(
+        await message.edit_text(
             with_action_label("add", "Выберите формат", data["title"]),
             reply_markup=create_kb_type(list(ResourceKind), get_callback_data),
         )
@@ -142,7 +158,7 @@ async def process_format(
         await state.update_data(resource_format=callback_data.option)
         try:
             resource = ResourceService.create_resource(
-                user_id=callback.from_user.id,
+                tg_id=callback.from_user.id,
                 url=data["link"],
                 resource_type=data["resource_type"],
                 kind=ResourceKind.from_code(callback_data.option),
@@ -167,6 +183,8 @@ async def process_format(
 
 @resource_router.message(AddResourceState.waiting_for_new_tags)
 async def process_new_tags(message: types.Message, state: FSMContext, bot: Bot):
+    if message.text is None:
+        return
     new_tags = [t.strip() for t in message.text.split(",") if t.strip()]
     data = await state.get_data()
     prompt_msg_id = data.get("prompt_msg_id")
@@ -209,32 +227,34 @@ async def process_new_tags(message: types.Message, state: FSMContext, bot: Bot):
     AddResourceState.waiting_for_save, AddResourceCallback.filter()
 )
 async def process_save_or_edit(
-    callback: types.CallbackQuery, callback_data: AddResourceCallback, state: FSMContext
+    callback: types.CallbackQuery,
+    callback_data: AddResourceCallback,
+    state: FSMContext,
+    resource_db: ResourceDB,
 ):
+    message = get_editable_message(callback)
+    if message is None:
+        return
     if callback_data.option == "save":
         data = await state.get_data()
         resource = data["resource"]
-        resource_id = 0
-        # try:
-        #     resource_id = db.insert(resource)
-        # except DuplicateResourceError as e:
-        #     clear()
-        #     print(f"ERROR: {e}")
-        #     pause()
-        #     return
-        msg = (
-            f"{hbold('Ресурс сохранён')}\n\n"
-            f"{hbold('Название:')} {resource.title}\n"
-            f"{hbold('Тип:')} {resource.resource_type.label}\n"
-            f"{hbold('Формат:')} {resource.kind.label}\n"
-            f"{hbold('Платформа:')} {resource.platform.label}\n"
-            f"{hbold('Тэги:')} {', '.join(resource.tags) if resource.tags else 'не указаны'}\n"
-            f"{hbold('Длительность:')} {resource.duration_display}\n"
-            f"{hbold('Рейтинг:')} {resource.rating:.1f}\n"
-            f"{hbold('ID:')} {resource_id}"
-        )
+        try:
+            resource_id = resource_db.insert(resource)
+            msg = (
+                f"{hbold('Ресурс сохранён')}\n\n"
+                f"{hbold('Название:')} {resource.title}\n"
+                f"{hbold('Тип:')} {resource.resource_type.label}\n"
+                f"{hbold('Формат:')} {resource.kind.label}\n"
+                f"{hbold('Платформа:')} {resource.platform.label}\n"
+                f"{hbold('Тэги:')} {', '.join(resource.tags) if resource.tags else 'не указаны'}\n"
+                f"{hbold('Длительность:')} {resource.duration_display}\n"
+                f"{hbold('Рейтинг:')} {resource.rating:.1f}\n"
+                f"{hbold('ID:')} {resource_id}"
+            )
+        except DuplicateResourceError:
+            msg = "Ресурс с такой ссылкой уже существует"
         await state.clear()
-        await callback.message.edit_text(msg)
+        await message.edit_text(msg)
 
     elif callback_data.option == "cancel":
         msg = (
@@ -242,7 +262,7 @@ async def process_save_or_edit(
             "Ресурс не сохранён. Чтобы начать заново, используйте /add"
         )
         await state.clear()
-        await callback.message.edit_text(msg)
+        await message.edit_text(msg)
 
     elif callback_data.option == "apply_new_tags":
         data = await state.get_data()
@@ -265,22 +285,23 @@ async def process_save_or_edit(
 
         if callback_data.option == "change_type":
             await state.set_state(AddResourceState.waiting_for_type)
-            await callback.message.edit_text(
+            await message.edit_text(
                 with_action_label("edit", "Выберите новый тип:", data["title"]),
                 reply_markup=create_kb_type(list(ResourceType), get_callback_data),
             )
         elif callback_data.option == "change_format":
             await state.set_state(AddResourceState.waiting_for_format)
-            await callback.message.edit_text(
+            await message.edit_text(
                 with_action_label("edit", "Выберите новый формат:", data["title"]),
                 reply_markup=create_kb_type(list(ResourceKind), get_callback_data),
             )
         elif callback_data.option == "change_tags":
             await state.set_state(AddResourceState.waiting_for_new_tags)
-            prompt_msg = await callback.message.edit_text(
+            result = await message.edit_text(
                 with_action_label("edit", "Напишите новые тэги:", data["title"])
             )
-            await state.update_data(prompt_msg_id=prompt_msg.message_id)
+            if isinstance(result, Message):
+                await state.update_data(prompt_msg_id=result.message_id)
 
     elif callback_data.option == "edit":
         data = await state.get_data()
@@ -291,7 +312,7 @@ async def process_save_or_edit(
             f"{hbold('Формат:')} {resource.kind.label}\n"
             f"{hbold('Тэги:')} {', '.join(resource.tags) if resource.tags else 'не указаны'}"
         )
-        await callback.message.edit_text(
+        await message.edit_text(
             msg,
             reply_markup=create_kb_tags(
                 ["Тип", "Формат", "Тэги", "Назад"],

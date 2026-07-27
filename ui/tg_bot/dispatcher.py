@@ -28,7 +28,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def main(user_db):
+async def main(user_db, resource_db):
     bot = None
     try:
         if not BOT_TOKEN:
@@ -49,7 +49,7 @@ async def main(user_db):
             logging.info("Бот запущен без прокси")
 
         dp = Dispatcher()
-        dp.update.middleware(ActivityMiddleware(user_db))
+        dp.update.middleware(ActivityMiddleware(user_db, resource_db))
         dp.update.middleware(LoggerMiddleware(logger))
         dp.include_router(resource_router)
         dp.include_router(common_router)
@@ -68,5 +68,5 @@ async def main(user_db):
             logging.info("Сессия закрыта")
 
 
-def start_bot(user_db):
-    asyncio.run(main(user_db))
+def start_bot(user_db, resource_db):
+    asyncio.run(main(user_db, resource_db))

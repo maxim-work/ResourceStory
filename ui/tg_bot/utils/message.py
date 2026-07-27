@@ -2,6 +2,7 @@ import asyncio
 from typing import Optional
 
 from aiogram import Bot
+from aiogram.types import CallbackQuery, Message
 from aiogram.utils.markdown import hbold
 
 
@@ -42,3 +43,9 @@ def with_action_label(action: str, text: str, title: Optional[str] = None) -> st
         label += f" «{title}»"
 
     return f"{hbold(label)}\n\n{text}"
+
+
+def get_editable_message(callback: CallbackQuery) -> Message | None:
+    if isinstance(callback.message, Message):
+        return callback.message
+    return None

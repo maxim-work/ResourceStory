@@ -5,11 +5,13 @@ from core.service import UserService
 
 common_router = Router()
 
-commands_text = "/start — описание\n/help — описание"
+commands_text = "/start — описание\n/help — описание\n/add - Добавление ресурса"
 
 
 @common_router.message(CommandStart())
 async def cmd_start(message: types.Message) -> None:
+    if message.from_user is None:
+        return
     user = message.from_user
     name = user.full_name or user.first_name if user else "Гость"
     UserService.create_user(

@@ -11,17 +11,17 @@ if __name__ == "__main__":
     from data.utils import start_db
 
     start_db()
-    db = ResourceDB()
+    resource_db = ResourceDB()
     user_db = UserDB
 
     if mode == "tg":
         from ui.tg_bot.dispatcher import start_bot
 
-        start_bot(user_db)
+        start_bot(user_db, resource_db)
     elif mode == "cli":
         from ui.cli.cli import start_cli
 
-        start_cli(db)
+        start_cli(resource_db)
     else:
         print(f"Неизвестный режим: {mode}")
         sys.exit(1)
