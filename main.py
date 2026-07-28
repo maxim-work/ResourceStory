@@ -12,7 +12,7 @@ if __name__ == "__main__":
 
     start_db()
     resource_db = ResourceDB()
-    user_db = UserDB
+    user_db = UserDB()
 
     if mode == "tg":
         from core.service import UserService

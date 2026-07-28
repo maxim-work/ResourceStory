@@ -1,5 +1,5 @@
 from aiogram import BaseMiddleware
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, Message, Update
 
 
 class RegistrationMiddleware(BaseMiddleware):
@@ -9,13 +9,20 @@ class RegistrationMiddleware(BaseMiddleware):
         super().__init__()
 
     async def __call__(self, handler, event, data):
-        if isinstance(event, (Message, CallbackQuery)) and event.from_user:
-            if self.user_db.get(event.from_user.id) is None:
+        if not isinstance(event, Update):
+            return await handler(event, data)
+        real_event = self._get_real_event(event)
+        if isinstance(real_event, (Message, CallbackQuery)) and real_event.from_user:
+            if self.user_db.get(real_event.from_user.id) is None:
                 user = self.user_service.create_user(
-                    tg_id=event.from_user.id,
-                    first_name=event.from_user.first_name,
-                    username=event.from_user.username,
-                    last_name=event.from_user.last_name,
+                    tg_id=real_event.from_user.id,
+                    first_name=real_event.from_user.first_name,
+                    username=real_event.from_user.username,
+                    last_name=real_event.from_user.last_name,
                 )
                 self.user_db.insert(user)
         return await handler(event, data)
+
+    @staticmethod
+    def _get_real_event(event: Update):
+        return event.message or event.callback_query
