@@ -14,6 +14,7 @@ from ui.tg_bot.handlers.resource import resource_router
 from ui.tg_bot.middlewares.activity import ActivityMiddleware
 from ui.tg_bot.middlewares.logger import LoggerMiddleware
 from ui.tg_bot.middlewares.registration import RegistrationMiddleware
+from ui.tg_bot.middlewares.user_update import UserUpdateMiddleware
 
 os.makedirs("logs", exist_ok=True)
 
@@ -51,6 +52,7 @@ async def main(user_db, resource_db, user_service):
 
         dp = Dispatcher()
         dp.update.middleware(RegistrationMiddleware(user_db, user_service))
+        dp.update.middleware(UserUpdateMiddleware(user_db, user_service))
         dp.update.middleware(ActivityMiddleware(user_db, resource_db))
         dp.update.middleware(LoggerMiddleware(logger))
         dp.include_router(resource_router)
