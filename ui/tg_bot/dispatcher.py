@@ -13,6 +13,7 @@ from ui.tg_bot.handlers.common import common_router
 from ui.tg_bot.handlers.resource import resource_router
 from ui.tg_bot.middlewares.activity import ActivityMiddleware
 from ui.tg_bot.middlewares.logger import LoggerMiddleware
+from ui.tg_bot.middlewares.registration import RegistrationMiddleware
 
 os.makedirs("logs", exist_ok=True)
 
@@ -28,7 +29,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def main(user_db, resource_db):
+async def main(user_db, resource_db, user_service):
     bot = None
     try:
         if not BOT_TOKEN:
@@ -49,6 +50,7 @@ async def main(user_db, resource_db):
             logging.info("Бот запущен без прокси")
 
         dp = Dispatcher()
+        dp.update.middleware(RegistrationMiddleware(user_db, user_service))
         dp.update.middleware(ActivityMiddleware(user_db, resource_db))
         dp.update.middleware(LoggerMiddleware(logger))
         dp.include_router(resource_router)
@@ -68,5 +70,5 @@ async def main(user_db, resource_db):
             logging.info("Сессия закрыта")
 
 
-def start_bot(user_db, resource_db):
-    asyncio.run(main(user_db, resource_db))
+def start_bot(user_db, resource_db, user_service):
+    asyncio.run(main(user_db, resource_db, user_service))

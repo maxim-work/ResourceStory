@@ -15,9 +15,10 @@ if __name__ == "__main__":
     user_db = UserDB
 
     if mode == "tg":
+        from core.service import UserService
         from ui.tg_bot.dispatcher import start_bot
 
-        start_bot(user_db, resource_db)
+        start_bot(user_db, resource_db, UserService())
     elif mode == "cli":
         from ui.cli.cli import start_cli
 
