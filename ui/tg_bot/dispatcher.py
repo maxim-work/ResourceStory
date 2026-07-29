@@ -9,6 +9,7 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
 
 from config import BOT_TOKEN, PROXY_URL
+from ui.tg_bot.handlers.admin import admin_router
 from ui.tg_bot.handlers.common import common_router
 from ui.tg_bot.handlers.resource import resource_router
 from ui.tg_bot.middlewares.activity import ActivityMiddleware
@@ -55,6 +56,7 @@ async def main(user_db, resource_db, user_service):
         dp.update.middleware(UserUpdateMiddleware(user_db, user_service))
         dp.update.middleware(ActivityMiddleware(user_db, resource_db))
         dp.update.middleware(LoggerMiddleware(logger))
+        dp.include_router(admin_router)
         dp.include_router(resource_router)
         dp.include_router(common_router)
         logging.info("Роутеры подключены")
