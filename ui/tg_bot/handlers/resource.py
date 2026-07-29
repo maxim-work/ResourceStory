@@ -5,6 +5,7 @@ from aiogram import Bot, F, Router, types
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
+from aiogram.types.reply_keyboard_remove import ReplyKeyboardRemove
 from aiogram.utils.markdown import hbold
 
 from config import PROXY_URL, YOUTUBE_API_KEY
@@ -58,11 +59,15 @@ async def show_save_summary(callback: types.CallbackQuery, state: FSMContext):
 
 
 @resource_router.message(Command("add"))
+@resource_router.message(F.text == "Добавить ресурс")
 async def cmd_add(message: types.Message, state: FSMContext) -> None:
     await state.set_state(AddResourceState.waiting_for_link)
     await message.delete()
     prompt_msg = await message.answer(
-        with_action_label("add", "Пришлите ссылку на статью, видео или другой материал")
+        with_action_label(
+            "add", "Пришлите ссылку на статью, видео или другой материал"
+        ),
+        reply_markup=ReplyKeyboardRemove(),
     )
     await state.update_data(prompt_msg_id=prompt_msg.message_id)
 

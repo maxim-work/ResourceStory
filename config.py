@@ -11,3 +11,4 @@ YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 EXPORT_DIR = Path("exports")
 MAX_URL_LENGTH = 2048
 USER_UPDATE_INTERVAL_HOURS = 12
+USER_COMMANDS = "/start — начать\n/help — помощь"
