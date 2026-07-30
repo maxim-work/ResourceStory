@@ -11,8 +11,18 @@ YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 EXPORT_DIR = Path("exports")
 MAX_URL_LENGTH = 2048
 USER_UPDATE_INTERVAL_HOURS = 12
-USER_COMMANDS = "/start — начать\n/help — помощь"
-ADMIN_COMMANDS = "/start — начать\n/help — помощь"
+USER_COMMANDS = "\n/start — начать\n/help — помощь"
+ADMIN_COMMANDS = "\n/start — начать\n/help — помощь"
 ADMIN_IDS = [
     int(id.strip()) for id in os.getenv("ADMIN_IDS", "").split(",") if id.strip()
 ]
+RESOURCES_PER_PAGE = 5
+EXIT_TEXTS = {
+    "/start",
+    "/add",
+    "Добавить ресурс",
+    "/list",
+    "Мои ресурсы",
+    "/help",
+    "Помощь",
+}

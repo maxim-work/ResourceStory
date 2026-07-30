@@ -12,6 +12,7 @@ from core.exceptions import (
     ProxyRequestError,
     ResourceNotFoundError,
 )
+from ui.tg_bot.utils.message import get_editable_message
 
 USER_ERRORS = {
     InvalidUrlParamError: "Некорректная ссылка.",
@@ -35,10 +36,14 @@ async def handle_resource_error(
     with_action_label,
     action: str = "error_add",
 ) -> bool:
+    message = get_editable_message(callback)
+    if message is None:
+        return False
+
     if type(error) in USER_ERRORS:
         handler = USER_ERRORS.get(type(error))
         msg = handler(error) if callable(handler) else handler
-        await callback.message.edit_text(with_action_label(action, msg))
+        await message.edit_text(with_action_label(action, msg))
         return True
 
     if isinstance(error, SYSTEM_ERRORS):
@@ -47,7 +52,7 @@ async def handle_resource_error(
             exc_info=True,
             extra=context,
         )
-        await callback.message.edit_text(
+        await message.edit_text(
             with_action_label(action, "Ошибка сервиса. Мы уже работаем над этим.")
         )
         return True

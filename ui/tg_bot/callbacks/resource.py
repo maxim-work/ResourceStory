@@ -1,5 +1,7 @@
 from aiogram.filters.callback_data import CallbackData
 
 
-class AddResourceCallback(CallbackData, prefix="add"):
-    option: str
+class ResourceCallback(CallbackData, prefix="res"):
+    action: str
+    resource_id: int | None = None
+    page: int | None = None
