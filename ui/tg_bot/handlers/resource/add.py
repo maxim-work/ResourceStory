@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import datetime
 
 from aiogram import Bot, F, Router, types
 from aiogram.filters import Command
@@ -7,7 +8,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.utils.markdown import hbold
 
 from config import PROXY_URL, YOUTUBE_API_KEY
-from core.models.resource import Resource, ResourceKind, ResourceType
+from core.models.resource import Resource, ResourceKind, ResourceStatus, ResourceType
 from core.service import ResourceService
 from data.service_db import ResourceDB
 from ui.tg_bot.callbacks.resource import (
@@ -213,11 +214,142 @@ async def process_save_or_edit(
     if message is None:
         return
 
+    data = await state.get_data()
+    edit_target = data.get("edit_target")
+
+    if edit_target == "change_status":
+        resource = data["resource"]
+        try:
+            new_status = ResourceStatus.from_code(callback_data.action)
+            resource.update_status(new_status)
+        except Exception:
+            await callback.answer("Неверный статус", show_alert=True)
+            return
+
+        await state.update_data(resource=resource, edit_target=None)
+        await _show_save_summary(callback, state)
+        return
+
     await handle_form_actions(
         callback=callback,
         callback_data=callback_data,
         state=state,
         resource_db=resource_db,
         message=message,
-        waiting_for_save_state=AddResourceState.waiting_for_save,
+    )
+
+
+@add_router.message(AddResourceState.waiting_for_notes)
+async def process_notes(message: types.Message, state: FSMContext, bot: Bot):
+    if message.text is None:
+        return
+    if await exit_fsm(message, state):
+        return
+
+    data = await state.get_data()
+    resource = data["resource"]
+    text = message.text.strip()
+
+    if text == "-":
+        resource.my_notes = None
+    else:
+        resource.my_notes = text
+
+    await message.delete()
+    await state.update_data(resource=resource, edit_target=None)
+    await state.set_state(AddResourceState.waiting_for_save)
+    await _show_save_summary_direct(message, state)
+
+
+@add_router.message(AddResourceState.waiting_for_rating)
+async def process_rating(message: types.Message, state: FSMContext, bot: Bot):
+    if message.text is None:
+        return
+    if await exit_fsm(message, state):
+        return
+
+    data = await state.get_data()
+    resource = data["resource"]
+    text = message.text.strip()
+
+    if not text.isdigit() or not (1 <= int(text) <= 5):
+        error_msg = await message.answer("Введите число от 1 до 5.")
+        await state.update_data(error_msg_id=error_msg.message_id)
+        asyncio.create_task(
+            auto_delete(bot, message.chat.id, error_msg.message_id, delay=3)
+        )
+        return
+
+    resource.my_rating = int(text)
+    await message.delete()
+    await state.update_data(resource=resource, edit_target=None)
+    await state.set_state(AddResourceState.waiting_for_save)
+    await _show_save_summary_direct(message, state)
+
+
+@add_router.message(AddResourceState.waiting_for_date)
+async def process_date(message: types.Message, state: FSMContext, bot: Bot):
+    if message.text is None:
+        return
+    if await exit_fsm(message, state):
+        return
+
+    data = await state.get_data()
+    resource = data["resource"]
+    text = message.text.strip()
+
+    if text == "-":
+        resource.completed_at = None
+    else:
+        try:
+            resource.completed_at = datetime.fromisoformat(text)
+        except ValueError:
+            error_msg = await message.answer(
+                "Неверный формат. Используйте ГГГГ-ММ-ДД или '-' для сброса."
+            )
+            await state.update_data(error_msg_id=error_msg.message_id)
+            asyncio.create_task(
+                auto_delete(bot, message.chat.id, error_msg.message_id, delay=4)
+            )
+            return
+
+    await message.delete()
+    await state.update_data(resource=resource, edit_target=None)
+    await state.set_state(AddResourceState.waiting_for_save)
+    await _show_save_summary_direct(message, state)
+
+
+async def _show_save_summary_direct(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    resource = data["resource"]
+    is_edit = data.get("edit_mode", False)
+
+    if is_edit:
+        msg = (
+            f"Проверьте изменения перед сохранением\n\n"
+            f"{hbold('Название:')} {resource.title}\n"
+            f"{hbold('Тип:')} {resource.resource_type.label}\n"
+            f"{hbold('Формат:')} {resource.kind.label}\n"
+            f"{hbold('Статус:')} {resource.status.label}\n"
+            f"{hbold('Тэги:')} {', '.join(resource.tags) if resource.tags else 'не указаны'}\n"
+            f"{hbold('Заметки:')} {resource.my_notes or 'нет'}\n"
+            f"{hbold('Рейтинг:')} {resource.my_rating or '—'}/5\n"
+            f"{hbold('Дата завершения:')} {resource.completed_at or 'не указана'}"
+        )
+    else:
+        msg = (
+            f"Проверьте данные перед сохранением\n\n"
+            f"{hbold('Ссылка:')} {resource.url}\n"
+            f"{hbold('Название:')} {resource.title}\n"
+            f"{hbold('Тип:')} {resource.resource_type.label}\n"
+            f"{hbold('Формат:')} {resource.kind.label}\n"
+            f"{hbold('Тэги:')} {', '.join(resource.tags) if resource.tags else 'не указаны'}"
+        )
+
+    await message.answer(
+        msg,
+        reply_markup=create_kb_tags(
+            ["Сохранить", "Изменить", "Отмена"],
+            pack_callback_data_list(["save", "edit", "cancel"]),
+        ),
     )

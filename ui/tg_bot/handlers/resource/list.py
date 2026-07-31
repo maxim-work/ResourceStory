@@ -11,7 +11,7 @@ from ui.tg_bot.keyboards.resource import create_list_keyboard
 from ui.tg_bot.states.resource import AddResourceState
 from ui.tg_bot.utils.message import get_editable_message
 
-from .form import handle_form_actions
+from .form import _show_save_summary
 
 list_router = Router()
 
@@ -26,7 +26,7 @@ def _format_resource_detail(r) -> str:
         f"{hbold('Статус:')} {r.status.label}\n"
         f"{hbold('Тэги:')} {', '.join(r.tags) if r.tags else 'не указаны'}\n"
         f"{hbold('Длительность:')} {r.duration_display}\n"
-        f"{hbold('Рейтинг:')} {r.rating:.1f}\n"
+        f"{hbold('Рейтинг:')} {r.my_rating or '—'}\n"
     )
 
 
@@ -125,15 +125,7 @@ async def list_callback(
                 edit_mode=True,
             )
             await state.set_state(AddResourceState.waiting_for_save)
-
-            await handle_form_actions(
-                callback=callback,
-                callback_data=callback_data,
-                state=state,
-                resource_db=resource_db,
-                message=message,
-                waiting_for_save_state=AddResourceState.waiting_for_save,
-            )
+            await _show_save_summary(callback, state)
 
         elif action == "delete":
             resource_db.delete(resource_id, tg_id)

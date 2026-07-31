@@ -3,15 +3,16 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from aiogram.utils.markdown import hbold
 
-from core.models.resource import ResourceKind, ResourceType
+from core.models.resource import ResourceKind, ResourceStatus, ResourceType
 from data.exceptions import DuplicateResourceError
 from data.service_db import ResourceDB
-from ui.tg_bot.callbacks.resource import get_callback_data, pack_callback_data_list
-from ui.tg_bot.keyboards.resource import (
+from ui.tg_bot.callbacks.resource import (
     ResourceCallback,
-    create_kb_tags,
-    create_kb_type,
+    get_callback_data,
+    pack_callback_data_list,
 )
+from ui.tg_bot.keyboards.resource import create_kb_tags, create_kb_type
+from ui.tg_bot.states.resource import AddResourceState
 from ui.tg_bot.utils.message import get_editable_message, with_action_label
 
 
@@ -21,9 +22,7 @@ async def handle_form_actions(
     state: FSMContext,
     resource_db: ResourceDB,
     message: types.Message,
-    waiting_for_save_state,
 ):
-
     action = callback_data.action
 
     if action == "save":
@@ -41,7 +40,15 @@ async def handle_form_actions(
     elif action == "back":
         await _show_save_summary(callback, state)
 
-    elif action in ("change_type", "change_format", "change_tags"):
+    elif action in (
+        "change_type",
+        "change_format",
+        "change_status",
+        "change_tags",
+        "change_notes",
+        "change_rating",
+        "change_date",
+    ):
         await _handle_change_field(callback, callback_data, state, message)
 
     elif action == "edit":
@@ -66,10 +73,12 @@ async def _handle_save(
                 f"{hbold('Название:')} {resource.title}\n"
                 f"{hbold('Тип:')} {resource.resource_type.label}\n"
                 f"{hbold('Формат:')} {resource.kind.label}\n"
+                f"{hbold('Статус:')} {resource.status.label}\n"
                 f"{hbold('Платформа:')} {resource.platform.label}\n"
                 f"{hbold('Тэги:')} {', '.join(resource.tags) if resource.tags else 'не указаны'}\n"
-                f"{hbold('Длительность:')} {resource.duration_display}\n"
-                f"{hbold('Рейтинг:')} {resource.rating:.1f}"
+                f"{hbold('Заметки:')} {resource.my_notes or 'нет'}\n"
+                f"{hbold('Рейтинг:')} {resource.my_rating or '—'}/5\n"
+                f"{hbold('Дата завершения:')} {resource.completed_at or 'нет'}"
             )
         else:
             resource_id = resource_db.insert(resource)
@@ -81,7 +90,7 @@ async def _handle_save(
                 f"{hbold('Платформа:')} {resource.platform.label}\n"
                 f"{hbold('Тэги:')} {', '.join(resource.tags) if resource.tags else 'не указаны'}\n"
                 f"{hbold('Длительность:')} {resource.duration_display}\n"
-                f"{hbold('Рейтинг:')} {resource.rating:.1f}\n"
+                f"{hbold('Рейтинг:')} {resource.my_rating or '—'}/5\n"
                 f"{hbold('ID:')} {resource_id}"
             )
     except DuplicateResourceError:
@@ -111,10 +120,7 @@ async def _handle_cancel(
     await message.edit_text(msg)
 
 
-async def _handle_apply_new_tags(
-    callback: types.CallbackQuery,
-    state: FSMContext,
-):
+async def _handle_apply_new_tags(callback: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
     resource = data["resource"]
     new_tags = data.get("new_tags")
@@ -123,10 +129,7 @@ async def _handle_apply_new_tags(
     await _show_save_summary(callback, state)
 
 
-async def _handle_keep_old_tags(
-    callback: types.CallbackQuery,
-    state: FSMContext,
-):
+async def _handle_keep_old_tags(callback: types.CallbackQuery, state: FSMContext):
     await state.update_data(new_tags=None, old_tags=None)
     await _show_save_summary(callback, state)
 
@@ -137,32 +140,75 @@ async def _handle_change_field(
     state: FSMContext,
     message: types.Message,
 ):
-
     data = await state.get_data()
     await state.update_data(edit_target=callback_data.action)
 
-    if callback_data.action == "change_type":
-        from ui.tg_bot.states.resource import AddResourceState
+    action = callback_data.action
 
+    if action == "change_type":
         await state.set_state(AddResourceState.waiting_for_type)
         await message.edit_text(
-            with_action_label("edit", "Выберите новый тип:", data["title"]),
+            with_action_label("edit", "Выберите новый тип:", data.get("title", "")),
             reply_markup=create_kb_type(list(ResourceType), get_callback_data),
         )
-    elif callback_data.action == "change_format":
-        from ui.tg_bot.states.resource import AddResourceState
 
+    elif action == "change_format":
         await state.set_state(AddResourceState.waiting_for_format)
         await message.edit_text(
-            with_action_label("edit", "Выберите новый формат:", data["title"]),
+            with_action_label("edit", "Выберите новый формат:", data.get("title", "")),
             reply_markup=create_kb_type(list(ResourceKind), get_callback_data),
         )
-    elif callback_data.action == "change_tags":
-        from ui.tg_bot.states.resource import AddResourceState
 
+    elif action == "change_status":
+        await state.set_state(AddResourceState.waiting_for_save)  # временно
+        await message.edit_text(
+            with_action_label("edit", "Выберите новый статус:", data.get("title", "")),
+            reply_markup=create_kb_type(list(ResourceStatus), get_callback_data),
+        )
+
+    elif action == "change_tags":
         await state.set_state(AddResourceState.waiting_for_new_tags)
         result = await message.edit_text(
-            with_action_label("edit", "Напишите новые тэги:", data["title"])
+            with_action_label("edit", "Напишите новые тэги:", data.get("title", ""))
+        )
+        if isinstance(result, Message):
+            await state.update_data(prompt_msg_id=result.message_id)
+
+    elif action == "change_notes":
+        await state.set_state(AddResourceState.waiting_for_notes)
+        current = data["resource"].my_notes or "нет"
+        result = await message.edit_text(
+            with_action_label(
+                "edit",
+                f"Текущая заметка: {current}\n\nНапишите новую (или '-' для удаления):",
+                data.get("title", ""),
+            )
+        )
+        if isinstance(result, Message):
+            await state.update_data(prompt_msg_id=result.message_id)
+
+    elif action == "change_rating":
+        await state.set_state(AddResourceState.waiting_for_rating)
+        current = data["resource"].my_rating or "—"
+        result = await message.edit_text(
+            with_action_label(
+                "edit",
+                f"Текущий рейтинг: {current}/5\n\nВведите новый (1-5):",
+                data.get("title", ""),
+            )
+        )
+        if isinstance(result, Message):
+            await state.update_data(prompt_msg_id=result.message_id)
+
+    elif action == "change_date":
+        await state.set_state(AddResourceState.waiting_for_date)
+        current = data["resource"].completed_at or "не указана"
+        result = await message.edit_text(
+            with_action_label(
+                "edit",
+                f"Текущая дата: {current}\n\nВведите дату (ГГГГ-ММ-ДД или '-' для сброса):",
+                data.get("title", ""),
+            )
         )
         if isinstance(result, Message):
             await state.update_data(prompt_msg_id=result.message_id)
@@ -175,21 +221,52 @@ async def _show_edit_menu(
 ):
     data = await state.get_data()
     resource = data["resource"]
+    is_edit = data.get("edit_mode", False)
 
-    msg = (
-        f"{hbold('Выберите, что хотите изменить')}\n\n"
-        f"{hbold('Тип:')} {resource.resource_type.label}\n"
-        f"{hbold('Формат:')} {resource.kind.label}\n"
-        f"{hbold('Тэги:')} {', '.join(resource.tags) if resource.tags else 'не указаны'}"
-    )
+    if is_edit:
+        msg = (
+            f"{hbold('Выберите, что хотите изменить')}\n\n"
+            f"{hbold('Тип:')} {resource.resource_type.label}\n"
+            f"{hbold('Формат:')} {resource.kind.label}\n"
+            f"{hbold('Статус:')} {resource.status.label}\n"
+            f"{hbold('Тэги:')} {', '.join(resource.tags) if resource.tags else 'не указаны'}\n"
+            f"{hbold('Заметки:')} {resource.my_notes or 'нет'}\n"
+            f"{hbold('Рейтинг:')} {resource.my_rating or '—'}/5\n"
+            f"{hbold('Дата завершения:')} {resource.completed_at or 'не указана'}"
+        )
+        buttons = [
+            "Тип",
+            "Формат",
+            "Статус",
+            "Тэги",
+            "Заметки",
+            "Рейтинг",
+            "Дата",
+            "Назад",
+        ]
+        actions = [
+            "change_type",
+            "change_format",
+            "change_status",
+            "change_tags",
+            "change_notes",
+            "change_rating",
+            "change_date",
+            "back",
+        ]
+    else:
+        msg = (
+            f"{hbold('Выберите, что хотите изменить')}\n\n"
+            f"{hbold('Тип:')} {resource.resource_type.label}\n"
+            f"{hbold('Формат:')} {resource.kind.label}\n"
+            f"{hbold('Тэги:')} {', '.join(resource.tags) if resource.tags else 'не указаны'}"
+        )
+        buttons = ["Тип", "Формат", "Тэги", "Назад"]
+        actions = ["change_type", "change_format", "change_tags", "back"]
+
     await message.edit_text(
         msg,
-        reply_markup=create_kb_tags(
-            ["Тип", "Формат", "Тэги", "Назад"],
-            pack_callback_data_list(
-                ["change_type", "change_format", "change_tags", "back"]
-            ),
-        ),
+        reply_markup=create_kb_tags(buttons, pack_callback_data_list(actions)),
     )
 
 
@@ -199,14 +276,30 @@ async def _show_save_summary(callback: types.CallbackQuery, state: FSMContext):
         return
     data = await state.get_data()
     resource = data["resource"]
-    msg = (
-        f"Проверьте данные перед сохранением\n\n"
-        f"{hbold('Ссылка:')} {resource.url}\n"
-        f"{hbold('Название:')} {resource.title}\n"
-        f"{hbold('Тип:')} {resource.resource_type.label}\n"
-        f"{hbold('Формат:')} {resource.kind.label}\n"
-        f"{hbold('Тэги:')} {', '.join(resource.tags) if resource.tags else 'не указаны'}"
-    )
+    is_edit = data.get("edit_mode", False)
+
+    if is_edit:
+        msg = (
+            f"Проверьте изменения перед сохранением\n\n"
+            f"{hbold('Название:')} {resource.title}\n"
+            f"{hbold('Тип:')} {resource.resource_type.label}\n"
+            f"{hbold('Формат:')} {resource.kind.label}\n"
+            f"{hbold('Статус:')} {resource.status.label}\n"
+            f"{hbold('Тэги:')} {', '.join(resource.tags) if resource.tags else 'не указаны'}\n"
+            f"{hbold('Заметки:')} {resource.my_notes or 'нет'}\n"
+            f"{hbold('Рейтинг:')} {resource.my_rating or '—'}/5\n"
+            f"{hbold('Дата завершения:')} {resource.completed_at or 'не указана'}"
+        )
+    else:
+        msg = (
+            f"Проверьте данные перед сохранением\n\n"
+            f"{hbold('Ссылка:')} {resource.url}\n"
+            f"{hbold('Название:')} {resource.title}\n"
+            f"{hbold('Тип:')} {resource.resource_type.label}\n"
+            f"{hbold('Формат:')} {resource.kind.label}\n"
+            f"{hbold('Тэги:')} {', '.join(resource.tags) if resource.tags else 'не указаны'}"
+        )
+
     await message.edit_text(
         msg,
         reply_markup=create_kb_tags(
