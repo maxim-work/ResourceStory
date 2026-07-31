@@ -1,8 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
-from pydantic.functional_validators import field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from core.exceptions import InvalidParamError
 
@@ -22,12 +21,8 @@ class User(BaseModel):
     @field_validator("tg_id")
     @classmethod
     def validate_tg_id(cls, v: int) -> int:
-        if not v:
-            raise InvalidParamError("tg_id", str(v), "tg_id обязателен")
-        if v < 2000000:
-            raise InvalidParamError(
-                "tg_id", str(v), "tg id не может быть меньше 2 000 000"
-            )
+        if v < 2_000_000:
+            raise InvalidParamError("tg_id", str(v), "tg_id должен быть >= 2 000 000")
         return v
 
     @field_validator("first_name")
@@ -43,10 +38,17 @@ class User(BaseModel):
             return f"{self.first_name} {self.last_name}"
         return self.first_name
 
+    @property
+    def is_inactive(self) -> bool:
+        return not self.is_active
+
     def update(self, username=None, first_name=None, last_name=None) -> None:
-        self.username = username or self.username
-        self.first_name = first_name or self.first_name
-        self.last_name = last_name or self.last_name
+        if username is not None:
+            self.username = username
+        if first_name is not None:
+            self.first_name = first_name
+        if last_name is not None:
+            self.last_name = last_name
 
     def deactivate(self) -> None:
         self.is_active = False
@@ -54,8 +56,20 @@ class User(BaseModel):
     def activate(self) -> None:
         self.is_active = True
 
+    def to_db_dict(self) -> dict:
+        return {
+            "tg_id": self.tg_id,
+            "username": self.username,
+            "first_name": self.first_name,
+            "last_name": self.last_name,
+            "is_active": self.is_active,
+            "last_active_at": self.last_active_at.isoformat()
+            if self.last_active_at
+            else None,
+        }
+
     def __str__(self) -> str:
-        return f"{self.full_name} @{self.username or ' отсутствует'}"
+        return f"{self.full_name} @{self.username or 'отсутствует'}"
 
     def __repr__(self) -> str:
         return f"{self.full_name} is_active={self.is_active} last_active_at={self.last_active_at}"

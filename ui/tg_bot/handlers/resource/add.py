@@ -4,15 +4,17 @@ import logging
 from aiogram import Bot, F, Router, types
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
 from aiogram.utils.markdown import hbold
 
 from config import PROXY_URL, YOUTUBE_API_KEY
 from core.models.resource import Resource, ResourceKind, ResourceType
 from core.service import ResourceService
-from data.exceptions import DuplicateResourceError
 from data.service_db import ResourceDB
-from ui.tg_bot.callbacks.resource import ResourceCallback
+from ui.tg_bot.callbacks.resource import (
+    ResourceCallback,
+    get_callback_data,
+    pack_callback_data_list,
+)
 from ui.tg_bot.keyboards.resource import create_kb_tags, create_kb_type
 from ui.tg_bot.states.resource import AddResourceState
 from ui.tg_bot.utils.error_handler import handle_resource_error
@@ -24,38 +26,9 @@ from ui.tg_bot.utils.message import (
     with_action_label,
 )
 
+from .form import _show_save_summary, handle_form_actions
+
 add_router = Router()
-
-
-def get_callback_data(option: str) -> str:
-    return ResourceCallback(action=option).pack()
-
-
-def pack_callback_data_list(options: list[str]) -> list[str]:
-    return [ResourceCallback(action=opt).pack() for opt in options]
-
-
-async def show_save_summary(callback: types.CallbackQuery, state: FSMContext):
-    message = get_editable_message(callback)
-    if message is None:
-        return
-    data = await state.get_data()
-    resource = data["resource"]
-    msg = (
-        f"Проверьте данные перед сохранением\n\n"
-        f"{hbold('Ссылка:')} {resource.url}\n"
-        f"{hbold('Название:')} {resource.title}\n"
-        f"{hbold('Тип:')} {resource.resource_type.label}\n"
-        f"{hbold('Формат:')} {resource.kind.label}\n"
-        f"{hbold('Тэги:')} {', '.join(resource.tags) if resource.tags else 'не указаны'}"
-    )
-    await message.edit_text(
-        msg,
-        reply_markup=create_kb_tags(
-            ["Сохранить", "Изменить", "Отмена"],
-            pack_callback_data_list(["save", "edit", "cancel"]),
-        ),
-    )
 
 
 @add_router.message(Command("add"))
@@ -128,7 +101,7 @@ async def process_type(
         )
         await state.update_data(resource=resource, edit_target=None)
         await state.set_state(AddResourceState.waiting_for_save)
-        await show_save_summary(callback, state)
+        await _show_save_summary(callback, state)
     else:
         await state.set_state(AddResourceState.waiting_for_format)
         await message.edit_text(
@@ -156,7 +129,7 @@ async def process_format(
         )
         await state.update_data(resource=resource, edit_target=None)
         await state.set_state(AddResourceState.waiting_for_save)
-        await show_save_summary(callback, state)
+        await _show_save_summary(callback, state)
         return
     else:
         await state.update_data(resource_format=callback_data.action)
@@ -182,7 +155,7 @@ async def process_format(
             raise
         await state.update_data(resource=resource)
         await state.set_state(AddResourceState.waiting_for_save)
-        await show_save_summary(callback, state)
+        await _show_save_summary(callback, state)
 
 
 @add_router.message(AddResourceState.waiting_for_new_tags)
@@ -239,89 +212,12 @@ async def process_save_or_edit(
     message = get_editable_message(callback)
     if message is None:
         return
-    if callback_data.action == "save":
-        data = await state.get_data()
-        resource = data["resource"]
-        try:
-            resource_id = resource_db.insert(resource)
-            msg = (
-                f"{hbold('Ресурс сохранён')}\n\n"
-                f"{hbold('Название:')} {resource.title}\n"
-                f"{hbold('Тип:')} {resource.resource_type.label}\n"
-                f"{hbold('Формат:')} {resource.kind.label}\n"
-                f"{hbold('Платформа:')} {resource.platform.label}\n"
-                f"{hbold('Тэги:')} {', '.join(resource.tags) if resource.tags else 'не указаны'}\n"
-                f"{hbold('Длительность:')} {resource.duration_display}\n"
-                f"{hbold('Рейтинг:')} {resource.rating:.1f}\n"
-                f"{hbold('ID:')} {resource_id}"
-            )
-        except DuplicateResourceError:
-            msg = "Ресурс с такой ссылкой уже существует"
-        await state.clear()
-        await message.edit_text(msg)
 
-    elif callback_data.action == "cancel":
-        msg = (
-            f"{hbold('Добавление отменено')}\n\n"
-            "Ресурс не сохранён. Чтобы начать заново, используйте /add"
-        )
-        await state.clear()
-        await message.edit_text(msg)
-
-    elif callback_data.action == "apply_new_tags":
-        data = await state.get_data()
-        resource = data["resource"]
-        new_tags = data.get("new_tags")
-        resource.tags = new_tags if new_tags else None
-        await state.update_data(resource=resource, new_tags=None, old_tags=None)
-        await show_save_summary(callback, state)
-
-    elif callback_data.action == "keep_old_tags":
-        await state.update_data(new_tags=None, old_tags=None)
-        await show_save_summary(callback, state)
-
-    elif callback_data.action == "back":
-        await show_save_summary(callback, state)
-
-    elif callback_data.action in ("change_type", "change_format", "change_tags"):
-        data = await state.get_data()
-        await state.update_data(edit_target=callback_data.action)
-
-        if callback_data.action == "change_type":
-            await state.set_state(AddResourceState.waiting_for_type)
-            await message.edit_text(
-                with_action_label("edit", "Выберите новый тип:", data["title"]),
-                reply_markup=create_kb_type(list(ResourceType), get_callback_data),
-            )
-        elif callback_data.action == "change_format":
-            await state.set_state(AddResourceState.waiting_for_format)
-            await message.edit_text(
-                with_action_label("edit", "Выберите новый формат:", data["title"]),
-                reply_markup=create_kb_type(list(ResourceKind), get_callback_data),
-            )
-        elif callback_data.action == "change_tags":
-            await state.set_state(AddResourceState.waiting_for_new_tags)
-            result = await message.edit_text(
-                with_action_label("edit", "Напишите новые тэги:", data["title"])
-            )
-            if isinstance(result, Message):
-                await state.update_data(prompt_msg_id=result.message_id)
-
-    elif callback_data.action == "edit":
-        data = await state.get_data()
-        resource = data["resource"]
-        msg = (
-            f"{hbold('Выберите, что хотите изменить')}\n\n"
-            f"{hbold('Тип:')} {resource.resource_type.label}\n"
-            f"{hbold('Формат:')} {resource.kind.label}\n"
-            f"{hbold('Тэги:')} {', '.join(resource.tags) if resource.tags else 'не указаны'}"
-        )
-        await message.edit_text(
-            msg,
-            reply_markup=create_kb_tags(
-                ["Тип", "Формат", "Тэги", "Назад"],
-                pack_callback_data_list(
-                    ["change_type", "change_format", "change_tags", "back"]
-                ),
-            ),
-        )
+    await handle_form_actions(
+        callback=callback,
+        callback_data=callback_data,
+        state=state,
+        resource_db=resource_db,
+        message=message,
+        waiting_for_save_state=AddResourceState.waiting_for_save,
+    )

@@ -64,13 +64,13 @@ class ResourceService:
         completed_at: Optional[datetime] = None,
     ) -> Resource:
         if resource_type is not None:
-            resource.update_type(resource_type)
+            resource.resource_type = resource_type
         if kind is not None:
-            resource.update_kind(kind)
+            resource.kind = kind
         if status is not None:
             resource.update_status(status)
         if my_notes is not None:
-            resource.update_my_notes(my_notes)
+            resource.my_notes = my_notes
         if my_rating is not None:
             resource.update_my_rating(my_rating)
         if completed_at is not None and resource.status != ResourceStatus.TO_TEACH:

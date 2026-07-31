@@ -62,9 +62,9 @@ def create_list_keyboard(
         for btn in nav:
             builder.button(text=btn.text, callback_data=btn.callback_data)
 
-    for r in resources:
+    for i, r in enumerate(resources):
         builder.button(
-            text=str(r.id),
+            text=str(i + 1),
             callback_data=ResourceCallback(
                 action="view", resource_id=r.id, page=page
             ).pack(),

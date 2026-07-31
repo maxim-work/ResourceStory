@@ -114,7 +114,7 @@ def add_video_cli(db, clear, pause):
 
     try:
         resource = ResourceService.create_resource(
-            user_id=1,
+            tg_id=1,
             url=url,
             resource_type=resource_type,
             kind=kind,
@@ -176,7 +176,7 @@ def add_video_cli(db, clear, pause):
     print(f"   Платформа: {resource.platform.label}")
     print(f"   Тэги: {', '.join(resource.tags)}")
     print(f"   Длительность: {resource.duration_display}")
-    print(f"   Рейтинг: {resource.rating:.1f}")
+    print(f"   Рейтинг: {resource.score:.1f}")
     print(f"   ID: {resource_id}")
 
     pause()
@@ -274,6 +274,7 @@ def search_cli(db, clear, pause):
 
     try:
         f = ResourceFilter(
+            tg_id=1,
             resource_type=resource_type,
             status=status,
             tags=tags,
@@ -350,6 +351,7 @@ def show_all_videos(db, clear, pause):
     clear()
 
     f = ResourceFilter(
+        tg_id=1,
         resource_type=None,
         status=None,
         tags=None,
@@ -457,7 +459,7 @@ def edit_video_cli(db, clear, pause):
             pause()
             return
 
-        f = ResourceFilter(keywords=keywords, limit=10)
+        f = ResourceFilter(tg_id=1, keywords=keywords, limit=10)
         try:
             results = db.search(f)
         except EmptyDatabaseError:

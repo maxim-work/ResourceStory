@@ -8,7 +8,10 @@ from aiogram.utils.markdown import hbold
 from config import RESOURCES_PER_PAGE
 from ui.tg_bot.callbacks.resource import ResourceCallback
 from ui.tg_bot.keyboards.resource import create_list_keyboard
+from ui.tg_bot.states.resource import AddResourceState
 from ui.tg_bot.utils.message import get_editable_message
+
+from .form import handle_form_actions
 
 list_router = Router()
 
@@ -43,12 +46,8 @@ async def cmd_list(message: Message, state: FSMContext, resource_db):
     total_pages = (len(resources) + RESOURCES_PER_PAGE - 1) // RESOURCES_PER_PAGE
     page_resources = resources[:RESOURCES_PER_PAGE]
 
-    lines = [f"{hbold('Ваши ресурсы:')}"]
-    for r in page_resources:
-        lines.append(f"{r.id}. {r.title} - {r.resource_type.label}")
-
     await message.answer(
-        "\n".join(lines),
+        _render_resource_list(page_resources, 1, total_pages),
         reply_markup=create_list_keyboard(page_resources, 1, total_pages),
     )
 
@@ -57,6 +56,7 @@ async def cmd_list(message: Message, state: FSMContext, resource_db):
 async def list_callback(
     callback: CallbackQuery,
     callback_data: ResourceCallback,
+    state: FSMContext,
     resource_db,
 ):
     message = get_editable_message(callback)
@@ -67,8 +67,6 @@ async def list_callback(
     action = callback_data.action
     page = callback_data.page or 1
     resource_id = callback_data.resource_id
-    if resource_id is None:
-        return
 
     if action in ("page", "prev", "next"):
         resources = resource_db.get_all_resources(tg_id)
@@ -76,64 +74,98 @@ async def list_callback(
         start = (page - 1) * RESOURCES_PER_PAGE
         page_resources = resources[start : start + RESOURCES_PER_PAGE]
 
-        lines = [f"{hbold('Ваши ресурсы:')}"]
-        for r in page_resources:
-            lines.append(f"{r.id}. {r.title} - {r.resource_type.label}")
-
         await message.edit_text(
-            "\n".join(lines),
+            _render_resource_list(page_resources, page, total),
             reply_markup=create_list_keyboard(page_resources, page, total),
         )
 
-    elif action == "view":
-        r = resource_db.get(resource_id, tg_id)
-        if r is None:
-            await callback.answer("Ресурс не найден", show_alert=True)
+    elif action in ("view", "edit", "delete"):
+        if resource_id is None:
             return
 
-        builder = InlineKeyboardBuilder()
-        builder.button(
-            text="К списку",
-            callback_data=ResourceCallback(action="page", page=1).pack(),
-        )
-        builder.button(
-            text="Редактировать",
-            callback_data=ResourceCallback(action="edit", resource_id=r.id).pack(),
-        )
-        builder.button(
-            text="Удалить",
-            callback_data=ResourceCallback(
-                action="delete", resource_id=r.id, page=page
-            ).pack(),
-        )
-        builder.adjust(1, 2)
+        if action == "view":
+            r = resource_db.get(resource_id, tg_id)
+            if r is None:
+                await callback.answer("Ресурс не найден", show_alert=True)
+                return
 
-        await message.edit_text(
-            _format_resource_detail(r), reply_markup=builder.as_markup()
-        )
-
-    elif action == "delete":
-        resource_db.delete(resource_id, tg_id)
-        resources = resource_db.get_all_resources(tg_id)
-
-        if not resources:
-            await message.edit_text(
-                "Ресурс удалён. У вас больше нет сохранённых ресурсов."
+            builder = InlineKeyboardBuilder()
+            builder.button(
+                text="К списку",
+                callback_data=ResourceCallback(action="page", page=1).pack(),
             )
-            await callback.answer("Удалено")
-            return
+            builder.button(
+                text="Редактировать",
+                callback_data=ResourceCallback(action="edit", resource_id=r.id).pack(),
+            )
+            builder.button(
+                text="Удалить",
+                callback_data=ResourceCallback(
+                    action="delete", resource_id=r.id, page=page
+                ).pack(),
+            )
+            builder.adjust(1, 2)
 
-        total = (len(resources) + RESOURCES_PER_PAGE - 1) // RESOURCES_PER_PAGE
-        start = (page - 1) * RESOURCES_PER_PAGE
-        page_resources = resources[start : start + RESOURCES_PER_PAGE]
-        if not page_resources:
-            page -= 1
+            await message.edit_text(
+                _format_resource_detail(r), reply_markup=builder.as_markup()
+            )
+
+        elif action == "edit":
+            if resource_id is None:
+                return
+
+            r = resource_db.get(resource_id, tg_id)
+            if r is None:
+                await callback.answer("Ресурс не найден", show_alert=True)
+                return
+
+            await state.update_data(
+                resource=r,
+                title=r.title,
+                edit_mode=True,
+            )
+            await state.set_state(AddResourceState.waiting_for_save)
+
+            await handle_form_actions(
+                callback=callback,
+                callback_data=callback_data,
+                state=state,
+                resource_db=resource_db,
+                message=message,
+                waiting_for_save_state=AddResourceState.waiting_for_save,
+            )
+
+        elif action == "delete":
+            resource_db.delete(resource_id, tg_id)
+            resources = resource_db.get_all_resources(tg_id)
+
+            if not resources:
+                await message.edit_text(
+                    "Ресурс удалён. У вас больше нет сохранённых ресурсов."
+                )
+                await callback.answer("Удалено")
+                return
+
+            total = (len(resources) + RESOURCES_PER_PAGE - 1) // RESOURCES_PER_PAGE
             start = (page - 1) * RESOURCES_PER_PAGE
             page_resources = resources[start : start + RESOURCES_PER_PAGE]
+            if not page_resources:
+                page -= 1
+                start = (page - 1) * RESOURCES_PER_PAGE
+                page_resources = resources[start : start + RESOURCES_PER_PAGE]
 
-        await message.edit_text(
-            f"{hbold('Ваши ресурсы:')}\n",
-            reply_markup=create_list_keyboard(page_resources, page, total),
-        )
+            await message.edit_text(
+                _render_resource_list(page_resources, page, total),
+                reply_markup=create_list_keyboard(page_resources, page, total),
+            )
 
     await callback.answer()
+
+
+def _render_resource_list(resources: list, page: int, total_pages: int) -> str:
+    lines = [f"{hbold('Ваши ресурсы:')}"]
+    for i, r in enumerate(resources, 1):
+        lines.append(f"{i}. {r.title} — {r.resource_type.label}")
+    if total_pages > 1:
+        lines.append(f"\nСтраница {page}/{total_pages}")
+    return "\n".join(lines)

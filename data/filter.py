@@ -267,7 +267,7 @@ def _score_one(
         ResourcePlatform.YOUTUBE,
         ResourcePlatform.HABR,
     ):
-        rating = resource.rating
+        rating = resource.score
         if f.rating_min is None or rating >= f.rating_min:
             score += int(rating / 10)
 

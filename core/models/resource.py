@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from math import log10
 from typing import Optional
@@ -10,6 +11,25 @@ from core.config import RATING_CONFIG
 from core.enum import ResourceKind, ResourcePlatform, ResourceStatus, ResourceType
 from core.exceptions import InvalidParamError, InvalidRatingError, UnknownClassCodeError
 from core.utils import detect_platform
+
+_PLATFORM_RATING_PARAMS = {
+    ResourcePlatform.YOUTUBE: {
+        "view_smoothing": RATING_CONFIG.view_smoothing,
+        "engagement_smoothing": RATING_CONFIG.engagement_smoothing,
+        "view_norm": RATING_CONFIG.video_view_norm,
+        "reach_multiplier": RATING_CONFIG.video_reach_multiplier,
+        "engagement_rate_multiplier": RATING_CONFIG.video_engagement_rate_multiplier,
+        "engagement_multiplier": RATING_CONFIG.video_engagement_multiplier,
+    },
+    ResourcePlatform.HABR: {
+        "view_smoothing": RATING_CONFIG.habr_view_smoothing,
+        "engagement_smoothing": RATING_CONFIG.habr_engagement_smoothing,
+        "view_norm": RATING_CONFIG.habr_view_norm,
+        "reach_multiplier": RATING_CONFIG.habr_reach_multiplier,
+        "engagement_rate_multiplier": RATING_CONFIG.habr_engagement_rate_multiplier,
+        "engagement_multiplier": RATING_CONFIG.habr_engagement_multiplier,
+    },
+}
 
 
 class Resource(BaseModel):
@@ -30,7 +50,7 @@ class Resource(BaseModel):
     my_rating: Optional[int] = None
     engagement: Optional[int] = None
     views: Optional[int] = None
-    duration: Optional[int] = None  # Duration in minutes (always stored as minutes)
+    duration: Optional[int] = None
     published_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.now)
@@ -60,9 +80,7 @@ class Resource(BaseModel):
             except UnknownClassCodeError:
                 return ResourceType.OTHER
         if not isinstance(v, ResourceType):
-            raise TypeError(
-                f"resource_type должен быть ResourceType — принято: {type(v).__name__}"
-            )
+            raise TypeError("resource_type должен быть ResourceType")
         return v
 
     @field_validator("platform", mode="before")
@@ -73,19 +91,14 @@ class Resource(BaseModel):
                 v = ResourcePlatform.from_code(v)
             except UnknownClassCodeError:
                 v = ResourcePlatform.OTHER
-
         if not isinstance(v, ResourcePlatform):
-            raise TypeError(
-                f"platform должна быть ResourcePlatform — принято: {type(v).__name__}"
-            )
-
+            raise TypeError("platform должна быть ResourcePlatform")
         if v == ResourcePlatform.OTHER:
             url = info.data.get("url") if info.data else None
             if url:
                 detected = detect_platform(url)
                 if detected in ("youtube", "habr"):
                     return ResourcePlatform.from_code(detected)
-
         return v
 
     @field_validator("kind", mode="before")
@@ -96,19 +109,14 @@ class Resource(BaseModel):
                 v = ResourceKind.from_code(v)
             except UnknownClassCodeError:
                 v = ResourceKind.OTHER
-
         if not isinstance(v, ResourceKind):
-            raise TypeError(
-                f"kind должен быть ResourceKind — принято: {type(v).__name__}"
-            )
-
+            raise TypeError("kind должен быть ResourceKind")
         if v == ResourceKind.OTHER:
             platform = info.data.get("platform") if info.data else None
             if platform == ResourcePlatform.YOUTUBE:
                 return ResourceKind.VIDEO
             elif platform == ResourcePlatform.HABR:
                 return ResourceKind.ARTICLE
-
         return v
 
     @field_validator("status", mode="before")
@@ -120,10 +128,22 @@ class Resource(BaseModel):
             except UnknownClassCodeError:
                 return ResourceStatus.TO_TEACH
         if not isinstance(v, ResourceStatus):
-            raise TypeError(
-                f"status должна быть ResourceStatus — принято: {type(v).__name__}"
-            )
+            raise TypeError("status должна быть ResourceStatus")
         return v
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def coerce_tags(cls, v) -> list[str]:
+        if v is None:
+            return []
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except (json.JSONDecodeError, TypeError):
+                return []
+        if isinstance(v, list):
+            return v
+        return []
 
     @field_validator("my_rating")
     @classmethod
@@ -132,32 +152,13 @@ class Resource(BaseModel):
             raise InvalidRatingError(v, RATING_CONFIG.max_personal_rating)
         return v
 
-    @field_validator("duration")
+    @field_validator("duration", "views", "engagement")
     @classmethod
-    def validate_duration(cls, v: Optional[int]) -> Optional[int]:
-        if v is not None:
-            cls._validate_positive(
-                v, "duration", f"Длительность не может быть отрицательной: {v}"
-            )
-        return v
-
-    @field_validator("views")
-    @classmethod
-    def validate_views(cls, v: Optional[int]) -> Optional[int]:
-        if v is not None:
-            cls._validate_positive(
-                v, "views", f"Количество просмотров не может быть отрицательным: {v}"
-            )
-        return v
-
-    @field_validator("engagement")
-    @classmethod
-    def validate_engagement(cls, v: Optional[int]) -> Optional[int]:
-        if v is not None:
-            cls._validate_positive(
-                v,
-                "engagement",
-                f"Вовлеченность(лайки, комментарии и тд) не может быть отрицательной: {v}",
+    def validate_positive(cls, v: Optional[int], info: ValidationInfo) -> Optional[int]:
+        if v is not None and v < 0:
+            field_name = info.field_name or "поле"
+            raise InvalidParamError(
+                field_name, str(v), f"{field_name} не может быть отрицательным"
             )
         return v
 
@@ -165,37 +166,26 @@ class Resource(BaseModel):
     def serialize_enum(self, value):
         return value.code
 
-    def update_stats(
-        self, views: Optional[int] = None, engagement: Optional[int] = None
-    ):
-        if views is not None:
-            self._validate_positive(
-                views,
-                "views",
-                f"Количество просмотров не может быть отрицательным: {views}",
-            )
-            self.views = views
-        if engagement is not None:
-            self._validate_positive(
-                engagement,
-                "engagement",
-                f"Вовлеченность(лайки, комментарии и тд) не может быть отрицательной: {engagement}",
-            )
-            self.engagement = engagement
+    @field_serializer("tags")
+    def serialize_tags(self, value: list[str]) -> str:
+        return json.dumps(value, ensure_ascii=False)
 
-    def update_type(self, new_type: ResourceType):
-        self.resource_type = new_type
-
-    def update_kind(self, new_kind: ResourceKind):
-        self.kind = new_kind
-
-    def update_my_notes(self, my_note: str):
-        self.my_notes = my_note
+    @classmethod
+    def from_url(cls, url: str, title: str = "") -> "Resource":
+        return cls(url=url, title=title)
 
     def update_my_rating(self, rating: int):
         if not 1 <= rating <= RATING_CONFIG.max_personal_rating:
             raise InvalidRatingError(rating, RATING_CONFIG.max_personal_rating)
         self.my_rating = rating
+
+    def update_stats(
+        self, views: Optional[int] = None, engagement: Optional[int] = None
+    ):
+        if views is not None:
+            self.views = views
+        if engagement is not None:
+            self.engagement = engagement
 
     def update_status(self, status: ResourceStatus):
         if status == ResourceStatus.TO_TEACH:
@@ -234,30 +224,17 @@ class Resource(BaseModel):
         return self.status != ResourceStatus.ARCHIVED
 
     @property
-    def rating(self) -> float:
-        cfg = RATING_CONFIG
+    def has_tags(self) -> bool:
+        return bool(self.tags)
 
+    @property
+    def score(self) -> float:
         if not self.views or self.views <= 0:
             return self._personal_rating_score()
 
-        if self.platform == ResourcePlatform.YOUTUBE:
-            return self._calculate_rating(
-                view_smoothing=cfg.view_smoothing,
-                engagement_smoothing=cfg.engagement_smoothing,
-                view_norm=cfg.video_view_norm,
-                reach_multiplier=cfg.video_reach_multiplier,
-                engagement_rate_multiplier=cfg.video_engagement_rate_multiplier,
-                engagement_multiplier=cfg.video_engagement_multiplier,
-            )
-        elif self.platform == ResourcePlatform.HABR:
-            return self._calculate_rating(
-                view_smoothing=cfg.habr_view_smoothing,
-                engagement_smoothing=cfg.habr_engagement_smoothing,
-                view_norm=cfg.habr_view_norm,
-                reach_multiplier=cfg.habr_reach_multiplier,
-                engagement_rate_multiplier=cfg.habr_engagement_rate_multiplier,
-                engagement_multiplier=cfg.habr_engagement_multiplier,
-            )
+        params = _PLATFORM_RATING_PARAMS.get(self.platform)
+        if params:
+            return self._calculate_rating(**params)
 
         return self._personal_rating_score()
 
@@ -265,13 +242,8 @@ class Resource(BaseModel):
     def duration_display(self) -> str:
         if self.duration is None:
             return "Не указано"
-
-        hours = self.duration // 60
-        minutes = self.duration % 60
-
-        if hours > 0:
-            return f"{hours}ч {minutes}мин"
-        return f"{minutes}мин"
+        hours, minutes = divmod(self.duration, 60)
+        return f"{hours}ч {minutes}мин" if hours > 0 else f"{minutes}мин"
 
     def format_detailed(self) -> str:
         parts = [
@@ -283,6 +255,31 @@ class Resource(BaseModel):
             parts.append(f"(Ваша оценка: {self.my_rating}/5)")
         return " ".join(parts)
 
+    def to_db_dict(self) -> dict:
+        return {
+            "tg_id": self.tg_id,
+            "title": self.title,
+            "url": self.url,
+            "description": self.description,
+            "resource_type": self.resource_type.code,
+            "platform": self.platform.code,
+            "kind": self.kind.code,
+            "external_id": self.external_id,
+            "status": self.status.code,
+            "tags": json.dumps(self.tags, ensure_ascii=False),
+            "my_notes": self.my_notes,
+            "my_rating": self.my_rating,
+            "engagement": self.engagement,
+            "views": self.views,
+            "duration": self.duration,
+            "published_at": self.published_at.isoformat()
+            if self.published_at
+            else None,
+            "completed_at": self.completed_at.isoformat()
+            if self.completed_at
+            else None,
+        }
+
     def __str__(self) -> str:
         return f"{self.title} [{self.resource_type.label}]"
 
@@ -290,6 +287,14 @@ class Resource(BaseModel):
         fields = {k: v for k, v in self.__dict__.items() if k != "args"}
         parts = [f"{k}={v!r}" for k, v in fields.items()]
         return f"Resource({', '.join(parts)})"
+
+    def __rich_repr__(self):
+        yield "id", self.id
+        yield "title", self.title
+        yield "url", self.url
+        yield "type", self.resource_type.label
+        yield "status", self.status.label
+        yield "score", self.score
 
     def _calculate_rating(
         self,
@@ -301,7 +306,6 @@ class Resource(BaseModel):
         engagement_multiplier: float,
     ) -> float:
         cfg = RATING_CONFIG
-
         v = self.views or 1
         e = self.engagement or 0
 
@@ -314,11 +318,11 @@ class Resource(BaseModel):
         capped_e = min(smoothed_e, float(smoothed_v))
         engagement_rate = capped_e / smoothed_v
 
-        if engagement_rate > 0:
-            eng_raw = log10(1.0 + engagement_rate * engagement_rate_multiplier)
-        else:
-            eng_raw = 0.0
-
+        eng_raw = (
+            log10(1.0 + engagement_rate * engagement_rate_multiplier)
+            if engagement_rate > 0
+            else 0.0
+        )
         eng_score = min(cfg.max_score / 2, eng_raw * engagement_multiplier)
 
         platform_score = reach_score + eng_score
@@ -344,15 +348,6 @@ class Resource(BaseModel):
     def _is_valid_url(url: str) -> bool:
         try:
             parsed = urlparse(url)
-            if not parsed.scheme or not parsed.netloc:
-                return False
-            if len(url) > MAX_URL_LENGTH:
-                return False
-            return True
+            return bool(parsed.scheme and parsed.netloc and len(url) <= MAX_URL_LENGTH)
         except Exception:
             return False
-
-    @staticmethod
-    def _validate_positive(value: int, param: str, error_msg: str) -> None:
-        if value < 0:
-            raise InvalidParamError(param, str(value), error_msg)
