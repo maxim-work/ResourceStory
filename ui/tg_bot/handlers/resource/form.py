@@ -12,7 +12,7 @@ from ui.tg_bot.callbacks.resource import (
     pack_callback_data_list,
 )
 from ui.tg_bot.keyboards.resource import create_kb_tags, create_kb_type
-from ui.tg_bot.states.resource import AddResourceState
+from ui.tg_bot.states.resource import ResourceState
 from ui.tg_bot.utils.message import get_editable_message, with_action_label
 
 
@@ -146,28 +146,28 @@ async def _handle_change_field(
     action = callback_data.action
 
     if action == "change_type":
-        await state.set_state(AddResourceState.waiting_for_type)
+        await state.set_state(ResourceState.waiting_for_type)
         await message.edit_text(
             with_action_label("edit", "Выберите новый тип:", data.get("title", "")),
             reply_markup=create_kb_type(list(ResourceType), get_callback_data),
         )
 
     elif action == "change_format":
-        await state.set_state(AddResourceState.waiting_for_format)
+        await state.set_state(ResourceState.waiting_for_format)
         await message.edit_text(
             with_action_label("edit", "Выберите новый формат:", data.get("title", "")),
             reply_markup=create_kb_type(list(ResourceKind), get_callback_data),
         )
 
     elif action == "change_status":
-        await state.set_state(AddResourceState.waiting_for_save)  # временно
+        await state.set_state(ResourceState.waiting_for_save)  # временно
         await message.edit_text(
             with_action_label("edit", "Выберите новый статус:", data.get("title", "")),
             reply_markup=create_kb_type(list(ResourceStatus), get_callback_data),
         )
 
     elif action == "change_tags":
-        await state.set_state(AddResourceState.waiting_for_new_tags)
+        await state.set_state(ResourceState.waiting_for_new_tags)
         result = await message.edit_text(
             with_action_label("edit", "Напишите новые тэги:", data.get("title", ""))
         )
@@ -175,7 +175,7 @@ async def _handle_change_field(
             await state.update_data(prompt_msg_id=result.message_id)
 
     elif action == "change_notes":
-        await state.set_state(AddResourceState.waiting_for_notes)
+        await state.set_state(ResourceState.waiting_for_notes)
         current = data["resource"].my_notes or "нет"
         result = await message.edit_text(
             with_action_label(
@@ -188,7 +188,7 @@ async def _handle_change_field(
             await state.update_data(prompt_msg_id=result.message_id)
 
     elif action == "change_rating":
-        await state.set_state(AddResourceState.waiting_for_rating)
+        await state.set_state(ResourceState.waiting_for_rating)
         current = data["resource"].my_rating or "—"
         result = await message.edit_text(
             with_action_label(
@@ -201,7 +201,7 @@ async def _handle_change_field(
             await state.update_data(prompt_msg_id=result.message_id)
 
     elif action == "change_date":
-        await state.set_state(AddResourceState.waiting_for_date)
+        await state.set_state(ResourceState.waiting_for_date)
         current = data["resource"].completed_at or "не указана"
         result = await message.edit_text(
             with_action_label(

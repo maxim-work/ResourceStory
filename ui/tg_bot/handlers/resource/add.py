@@ -17,7 +17,7 @@ from ui.tg_bot.callbacks.resource import (
     pack_callback_data_list,
 )
 from ui.tg_bot.keyboards.resource import create_kb_tags, create_kb_type
-from ui.tg_bot.states.resource import AddResourceState
+from ui.tg_bot.states.resource import ResourceState
 from ui.tg_bot.utils.error_handler import handle_resource_error
 from ui.tg_bot.utils.fsm import exit_fsm
 from ui.tg_bot.utils.message import (
@@ -35,7 +35,7 @@ add_router = Router()
 @add_router.message(Command("add"))
 @add_router.message(F.text == "Добавить ресурс")
 async def cmd_add(message: types.Message, state: FSMContext) -> None:
-    await state.set_state(AddResourceState.waiting_for_link)
+    await state.set_state(ResourceState.waiting_for_link)
     await message.delete()
     prompt_msg = await message.answer(
         with_action_label(
@@ -45,7 +45,7 @@ async def cmd_add(message: types.Message, state: FSMContext) -> None:
     await state.update_data(prompt_msg_id=prompt_msg.message_id)
 
 
-@add_router.message(AddResourceState.waiting_for_link, F.text)
+@add_router.message(ResourceState.waiting_for_link, F.text)
 async def process_link(message: types.Message, state: FSMContext, bot: Bot):
     if await exit_fsm(message, state):
         return
@@ -76,14 +76,14 @@ async def process_link(message: types.Message, state: FSMContext, bot: Bot):
     )["title"]
     await state.update_data(title=title)
     await state.update_data(link=link)
-    await state.set_state(AddResourceState.waiting_for_type)
+    await state.set_state(ResourceState.waiting_for_type)
     await message.answer(
         with_action_label("add", "Выберите тип:", title),
         reply_markup=create_kb_type(list(ResourceType), get_callback_data),
     )
 
 
-@add_router.callback_query(AddResourceState.waiting_for_type, ResourceCallback.filter())
+@add_router.callback_query(ResourceState.waiting_for_type, ResourceCallback.filter())
 async def process_type(
     callback: types.CallbackQuery, callback_data: ResourceCallback, state: FSMContext
 ):
@@ -101,19 +101,17 @@ async def process_type(
             resource, resource_type=ResourceType.from_code(callback_data.action)
         )
         await state.update_data(resource=resource, edit_target=None)
-        await state.set_state(AddResourceState.waiting_for_save)
+        await state.set_state(ResourceState.waiting_for_save)
         await _show_save_summary(callback, state)
     else:
-        await state.set_state(AddResourceState.waiting_for_format)
+        await state.set_state(ResourceState.waiting_for_format)
         await message.edit_text(
             with_action_label("add", "Выберите формат", data["title"]),
             reply_markup=create_kb_type(list(ResourceKind), get_callback_data),
         )
 
 
-@add_router.callback_query(
-    AddResourceState.waiting_for_format, ResourceCallback.filter()
-)
+@add_router.callback_query(ResourceState.waiting_for_format, ResourceCallback.filter())
 async def process_format(
     callback: types.CallbackQuery,
     callback_data: ResourceCallback,
@@ -129,7 +127,7 @@ async def process_format(
             resource, kind=ResourceKind.from_code(callback_data.action)
         )
         await state.update_data(resource=resource, edit_target=None)
-        await state.set_state(AddResourceState.waiting_for_save)
+        await state.set_state(ResourceState.waiting_for_save)
         await _show_save_summary(callback, state)
         return
     else:
@@ -155,11 +153,11 @@ async def process_format(
                 return
             raise
         await state.update_data(resource=resource)
-        await state.set_state(AddResourceState.waiting_for_save)
+        await state.set_state(ResourceState.waiting_for_save)
         await _show_save_summary(callback, state)
 
 
-@add_router.message(AddResourceState.waiting_for_new_tags)
+@add_router.message(ResourceState.waiting_for_new_tags)
 async def process_new_tags(message: types.Message, state: FSMContext, bot: Bot):
     if message.text is None:
         return
@@ -183,7 +181,7 @@ async def process_new_tags(message: types.Message, state: FSMContext, bot: Bot):
         old_tags=old_tags,
         edit_target=None,
     )
-    await state.set_state(AddResourceState.waiting_for_save)
+    await state.set_state(ResourceState.waiting_for_save)
 
     msg = (
         f"{hbold('Новые тэги:')}\n\n"
@@ -203,7 +201,7 @@ async def process_new_tags(message: types.Message, state: FSMContext, bot: Bot):
     )
 
 
-@add_router.callback_query(AddResourceState.waiting_for_save, ResourceCallback.filter())
+@add_router.callback_query(ResourceState.waiting_for_save, ResourceCallback.filter())
 async def process_save_or_edit(
     callback: types.CallbackQuery,
     callback_data: ResourceCallback,
@@ -239,7 +237,7 @@ async def process_save_or_edit(
     )
 
 
-@add_router.message(AddResourceState.waiting_for_notes)
+@add_router.message(ResourceState.waiting_for_notes)
 async def process_notes(message: types.Message, state: FSMContext, bot: Bot):
     if message.text is None:
         return
@@ -257,11 +255,11 @@ async def process_notes(message: types.Message, state: FSMContext, bot: Bot):
 
     await message.delete()
     await state.update_data(resource=resource, edit_target=None)
-    await state.set_state(AddResourceState.waiting_for_save)
+    await state.set_state(ResourceState.waiting_for_save)
     await _show_save_summary_direct(message, state)
 
 
-@add_router.message(AddResourceState.waiting_for_rating)
+@add_router.message(ResourceState.waiting_for_rating)
 async def process_rating(message: types.Message, state: FSMContext, bot: Bot):
     if message.text is None:
         return
@@ -283,11 +281,11 @@ async def process_rating(message: types.Message, state: FSMContext, bot: Bot):
     resource.my_rating = int(text)
     await message.delete()
     await state.update_data(resource=resource, edit_target=None)
-    await state.set_state(AddResourceState.waiting_for_save)
+    await state.set_state(ResourceState.waiting_for_save)
     await _show_save_summary_direct(message, state)
 
 
-@add_router.message(AddResourceState.waiting_for_date)
+@add_router.message(ResourceState.waiting_for_date)
 async def process_date(message: types.Message, state: FSMContext, bot: Bot):
     if message.text is None:
         return
@@ -315,7 +313,7 @@ async def process_date(message: types.Message, state: FSMContext, bot: Bot):
 
     await message.delete()
     await state.update_data(resource=resource, edit_target=None)
-    await state.set_state(AddResourceState.waiting_for_save)
+    await state.set_state(ResourceState.waiting_for_save)
     await _show_save_summary_direct(message, state)
 
 

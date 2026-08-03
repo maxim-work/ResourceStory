@@ -8,7 +8,7 @@ from aiogram.utils.markdown import hbold
 from config import RESOURCES_PER_PAGE
 from ui.tg_bot.callbacks.resource import ResourceCallback
 from ui.tg_bot.keyboards.resource import create_list_keyboard
-from ui.tg_bot.states.resource import AddResourceState
+from ui.tg_bot.states.resource import ResourceState
 from ui.tg_bot.utils.message import get_editable_message
 
 from .form import _show_save_summary
@@ -124,7 +124,7 @@ async def list_callback(
                 title=r.title,
                 edit_mode=True,
             )
-            await state.set_state(AddResourceState.waiting_for_save)
+            await state.set_state(ResourceState.waiting_for_save)
             await _show_save_summary(callback, state)
 
         elif action == "delete":
