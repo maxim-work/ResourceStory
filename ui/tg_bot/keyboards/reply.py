@@ -6,8 +6,9 @@ def get_user_start_keyboard() -> ReplyKeyboardMarkup:
     builder = ReplyKeyboardBuilder()
     builder.button(text="Добавить ресурс")
     builder.button(text="Мои ресурсы")
+    builder.button(text="Поиск")
     builder.button(text="Помощь")
-    builder.adjust(1, 2)
+    builder.adjust(2, 2)
     return builder.as_markup(
         resize_keyboard=True,
         input_field_placeholder="Выберите действие",
@@ -18,9 +19,10 @@ def get_admin_start_keyboard() -> ReplyKeyboardMarkup:
     builder = ReplyKeyboardBuilder()
     builder.button(text="Добавить ресурс")
     builder.button(text="Мои ресурсы")
+    builder.button(text="Поиск")
     builder.button(text="Помощь")
     builder.button(text="Админ-панель")
-    builder.adjust(1, 2, 1)
+    builder.adjust(2, 2, 1)
     return builder.as_markup(
         resize_keyboard=True,
         input_field_placeholder="Выберите действие",

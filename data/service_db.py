@@ -95,7 +95,7 @@ class ResourceDB:
         self, tg_id: int, filter: Optional[ResourceFilter] = None
     ) -> list[tuple[Resource, int]]:
         if filter is None:
-            filter = ResourceFilter(tg_id)
+            filter = ResourceFilter(tg_id=tg_id)
         resources = self._get_candidates(filter)
         return calculate_scores(resources, filter)
 

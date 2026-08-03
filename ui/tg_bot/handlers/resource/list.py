@@ -79,7 +79,7 @@ async def list_callback(
             reply_markup=create_list_keyboard(page_resources, page, total),
         )
 
-    elif action in ("view", "edit", "delete"):
+    elif action in ("view", "edit", "delete", "confirm_delete"):
         if resource_id is None:
             return
 
@@ -101,7 +101,7 @@ async def list_callback(
             builder.button(
                 text="Удалить",
                 callback_data=ResourceCallback(
-                    action="delete", resource_id=r.id, page=page
+                    action="confirm_delete", resource_id=r.id, page=page
                 ).pack(),
             )
             builder.adjust(1, 2)
@@ -111,9 +111,6 @@ async def list_callback(
             )
 
         elif action == "edit":
-            if resource_id is None:
-                return
-
             r = resource_db.get(resource_id, tg_id)
             if r is None:
                 await callback.answer("Ресурс не найден", show_alert=True)
@@ -127,21 +124,48 @@ async def list_callback(
             await state.set_state(ResourceState.waiting_for_save)
             await _show_save_summary(callback, state)
 
+        elif action == "confirm_delete":
+            r = resource_db.get(resource_id, tg_id)
+            if r is None:
+                await callback.answer("Ресурс не найден", show_alert=True)
+                return
+
+            builder = InlineKeyboardBuilder()
+            builder.button(
+                text="Да, удалить",
+                callback_data=ResourceCallback(
+                    action="delete", resource_id=resource_id, page=page
+                ).pack(),
+            )
+            builder.button(
+                text="Нет",
+                callback_data=ResourceCallback(
+                    action="view", resource_id=resource_id, page=page
+                ).pack(),
+            )
+            builder.adjust(2)
+
+            await message.edit_text(
+                f"Удалить ресурс «{r.title}»?",
+                reply_markup=builder.as_markup(),
+            )
+
         elif action == "delete":
             resource_db.delete(resource_id, tg_id)
+            await callback.answer("Удалено")
+
             resources = resource_db.get_all_resources(tg_id)
 
             if not resources:
                 await message.edit_text(
                     "Ресурс удалён. У вас больше нет сохранённых ресурсов."
                 )
-                await callback.answer("Удалено")
                 return
 
             total = (len(resources) + RESOURCES_PER_PAGE - 1) // RESOURCES_PER_PAGE
             start = (page - 1) * RESOURCES_PER_PAGE
             page_resources = resources[start : start + RESOURCES_PER_PAGE]
-            if not page_resources:
+            if not page_resources and page > 1:
                 page -= 1
                 start = (page - 1) * RESOURCES_PER_PAGE
                 page_resources = resources[start : start + RESOURCES_PER_PAGE]

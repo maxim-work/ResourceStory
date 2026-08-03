@@ -7,6 +7,12 @@ class ResourceCallback(CallbackData, prefix="res"):
     page: int | None = None
 
 
+class SearchCallback(CallbackData, prefix="search"):
+    action: str
+    resource_id: int | None = None
+    page: int | None = None
+
+
 def get_callback_data(option: str) -> str:
     return ResourceCallback(action=option).pack()
 
