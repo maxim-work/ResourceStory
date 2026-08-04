@@ -13,6 +13,10 @@ class SearchCallback(CallbackData, prefix="search"):
     page: int | None = None
 
 
+class SettingsCallback(CallbackData, prefix="settings"):
+    action: str
+
+
 def get_callback_data(option: str) -> str:
     return ResourceCallback(action=option).pack()
 

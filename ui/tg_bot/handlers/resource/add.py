@@ -27,7 +27,7 @@ from ui.tg_bot.utils.message import (
     with_action_label,
 )
 
-from .form import _show_save_summary, handle_form_actions
+from .form import _show_edit_menu, _show_save_summary, handle_form_actions
 
 add_router = Router()
 
@@ -227,6 +227,14 @@ async def process_save_or_edit(
         await state.update_data(resource=resource, edit_target=None)
         await _show_save_summary(callback, state)
         return
+
+    if callback_data.action.startswith("set_rating_"):
+        rating = int(callback_data.action.split("_")[2])
+        data = await state.get_data()
+        resource = data["resource"]
+        resource.my_rating = rating if rating > 0 else None
+        await state.update_data(resource=resource)
+        await _show_edit_menu(callback, state, message)
 
     await handle_form_actions(
         callback=callback,

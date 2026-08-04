@@ -5,7 +5,11 @@ from aiogram.types.inline_keyboard_markup import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from config import RESOURCES_PER_PAGE
-from ui.tg_bot.callbacks.resource import ResourceCallback, SearchCallback
+from ui.tg_bot.callbacks.resource import (
+    ResourceCallback,
+    SearchCallback,
+    SettingsCallback,
+)
 
 
 def _build_keyboard(
@@ -114,3 +118,17 @@ def create_search_keyboard(
             else SearchCallback(action="view", resource_id=val[0].id, page=page).pack()
         ),
     )
+
+
+def create_settings_menu():
+    builder = InlineKeyboardBuilder()
+    builder.button(
+        text="Экспорт ссылок",
+        callback_data=SettingsCallback(action="export_urls").pack(),
+    )
+    builder.button(
+        text="Экспорт данных",
+        callback_data=SettingsCallback(action="export_data").pack(),
+    )
+    builder.adjust(2)
+    return builder.as_markup()

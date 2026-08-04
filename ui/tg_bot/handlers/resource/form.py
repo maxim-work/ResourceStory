@@ -188,17 +188,34 @@ async def _handle_change_field(
             await state.update_data(prompt_msg_id=result.message_id)
 
     elif action == "change_rating":
-        await state.set_state(ResourceState.waiting_for_rating)
-        current = data["resource"].my_rating or "—"
-        result = await message.edit_text(
+        from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+        current = data["resource"].my_rating
+        builder = InlineKeyboardBuilder()
+        for i in range(1, 6):
+            text = f"★{i}" if current and i <= current else str(i)
+            builder.button(
+                text=text,
+                callback_data=ResourceCallback(action=f"set_rating_{i}").pack(),
+            )
+        builder.button(
+            text="Убрать оценку",
+            callback_data=ResourceCallback(action="set_rating_0").pack(),
+        )
+        builder.button(
+            text="Назад",
+            callback_data=ResourceCallback(action="edit").pack(),
+        )
+        builder.adjust(5, 2)
+
+        await message.edit_text(
             with_action_label(
                 "edit",
-                f"Текущий рейтинг: {current}/5\n\nВведите новый (1-5):",
+                f"Текущий рейтинг: {current or '—'}/5\n\nВыберите новый:",
                 data.get("title", ""),
-            )
+            ),
+            reply_markup=builder.as_markup(),
         )
-        if isinstance(result, Message):
-            await state.update_data(prompt_msg_id=result.message_id)
 
     elif action == "change_date":
         await state.set_state(ResourceState.waiting_for_date)
