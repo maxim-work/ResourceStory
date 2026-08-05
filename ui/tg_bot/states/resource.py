@@ -11,3 +11,5 @@ class ResourceState(StatesGroup):
     waiting_for_rating = State()
     waiting_for_date = State()
     waiting_for_search = State()
+    waiting_for_import_data = State()
+    waiting_for_import_urls = State()

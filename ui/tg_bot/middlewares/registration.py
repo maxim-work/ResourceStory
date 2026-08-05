@@ -1,6 +1,8 @@
 from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message, Update
 
+from ui.tg_bot.middlewares.utils import get_real_event
+
 
 class RegistrationMiddleware(BaseMiddleware):
     def __init__(self, user_db, user_service):
@@ -11,7 +13,7 @@ class RegistrationMiddleware(BaseMiddleware):
     async def __call__(self, handler, event, data):
         if not isinstance(event, Update):
             return await handler(event, data)
-        real_event = self._get_real_event(event)
+        real_event = get_real_event(event)
         if isinstance(real_event, (Message, CallbackQuery)) and real_event.from_user:
             if self.user_db.get(real_event.from_user.id) is None:
                 user = self.user_service.create_user(
@@ -22,7 +24,3 @@ class RegistrationMiddleware(BaseMiddleware):
                 )
                 self.user_db.insert(user)
         return await handler(event, data)
-
-    @staticmethod
-    def _get_real_event(event: Update):
-        return event.message or event.callback_query

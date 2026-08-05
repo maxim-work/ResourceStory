@@ -114,23 +114,34 @@ class ResourceDB:
         return [Resource(**dict(row)) for row in rows]
 
     def import_data(
-        self, data: list[Resource], tg_id: Optional[int] = None
-    ) -> tuple[int, int]:
+        self, data: list[Resource], tg_id: int
+    ) -> tuple[int, int, list[str]]:
         count = 0
-        total = len(data)
+        errors = []
 
-        with self.conn:
+        with self.conn as conn:
+            conn.execute("BEGIN")
             for resource in data:
                 try:
-                    resource.tg_id = resource.tg_id or tg_id or 1
                     resource_data = resource.to_db_dict()
-                    self.conn.execute(self._build_insert_query(), resource_data)
+                    conn.execute(self._build_insert_query(), resource_data)
                     count += 1
                 except sqlite3.IntegrityError:
-                    continue
-            self.conn.commit()
+                    errors.append(f"Дубликат: {resource.url}")
+                except Exception as e:
+                    errors.append(f"{resource.url}: {e}")
+            conn.commit()
 
-        return count, total
+        return count, len(data), errors
+
+    def get_by_url(self, url: str, tg_id: int) -> Optional[Resource]:
+        with self.conn as conn:
+            cursor = conn.execute(
+                "SELECT * FROM resources WHERE url = ? AND tg_id = ?",
+                (url, tg_id),
+            )
+            row = cursor.fetchone()
+        return Resource(**dict(row)) if row else None
 
     def close(self) -> None:
         self.conn.close()

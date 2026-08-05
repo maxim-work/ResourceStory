@@ -9,7 +9,12 @@ from aiogram.utils.markdown import hbold
 from data.service_db import ResourceDB
 from data_io.export_data import write_data_file, write_urls_file
 from ui.tg_bot.callbacks.resource import SettingsCallback
-from ui.tg_bot.keyboards.resource import create_settings_menu
+from ui.tg_bot.keyboards.resource import (
+    create_import_data_menu,
+    create_import_urls_menu,
+    create_settings_menu,
+)
+from ui.tg_bot.states.resource import ResourceState
 from ui.tg_bot.utils.message import get_editable_message
 
 settings_router = Router()
@@ -72,3 +77,43 @@ async def settings_callback(
         )
         os.remove(filepath)
         await callback.answer()
+
+    elif action == "import_urls_menu":
+        await message.edit_text(
+            "Импорт ссылок:\n\n"
+            "• Быстрый — все ссылки сохранятся с типом «Другое» и форматом по умолчанию.\n"
+            "• Детальный — для каждой ссылки можно выбрать тип и формат.",
+            reply_markup=create_import_urls_menu(),
+        )
+
+    elif action == "import_data_menu":
+        await message.edit_text(
+            "Импорт данных:\n\n"
+            "• Быстрый — загрузите JSON-файл, ресурсы добавятся без подтверждения.\n"
+            "• Детальный — для каждого ресурса из файла можно изменить данные перед сохранением.",
+            reply_markup=create_import_data_menu(),
+        )
+
+    elif action == "import_urls_fast":
+        await state.set_state(ResourceState.waiting_for_import_urls)
+        await state.update_data(import_mode="fast", import_type="urls")
+        await message.edit_text(
+            "Пришлите список ссылок (по одной на строку) или файл.txt:"
+        )
+
+    elif action == "import_urls_detailed":
+        await state.set_state(ResourceState.waiting_for_import_urls)
+        await state.update_data(import_mode="detailed", import_type="urls")
+        await message.edit_text(
+            "Пришлите список ссылок (по одной на строку) или файл.txt:"
+        )
+
+    elif action == "import_data_fast":
+        await state.set_state(ResourceState.waiting_for_import_data)
+        await state.update_data(import_mode="fast", import_type="data")
+        await message.edit_text("Пришлите JSON-файл с данными:")
+
+    elif action == "import_data_detailed":
+        await state.set_state(ResourceState.waiting_for_import_data)
+        await state.update_data(import_mode="detailed", import_type="data")
+        await message.edit_text("Пришлите JSON-файл с данными:")

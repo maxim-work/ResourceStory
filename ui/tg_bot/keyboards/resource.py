@@ -55,14 +55,14 @@ def _build_paginated_keyboard(
         nav.append(
             InlineKeyboardButton(
                 text="◀ Назад",
-                callback_data=get_callback(page - 1, "nav"),
+                callback_data=get_callback("nav", page - 1),
             )
         )
     if page < total_pages:
         nav.append(
             InlineKeyboardButton(
                 text="Вперёд ▶",
-                callback_data=get_callback(page + 1, "nav"),
+                callback_data=get_callback("nav", page + 1),
             )
         )
 
@@ -115,7 +115,11 @@ def create_search_keyboard(
         get_callback=lambda flag, val: (
             SearchCallback(action="page", page=val).pack()
             if flag == "nav"
-            else SearchCallback(action="view", resource_id=val[0].id, page=page).pack()
+            else SearchCallback(
+                action="view",
+                resource_id=val[0].id if isinstance(val, tuple) else val.id,
+                page=page,
+            ).pack()
         ),
     )
 
@@ -130,5 +134,47 @@ def create_settings_menu():
         text="Экспорт данных",
         callback_data=SettingsCallback(action="export_data").pack(),
     )
+    builder.button(
+        text="Импорт ссылок",
+        callback_data=SettingsCallback(action="import_urls_menu").pack(),
+    )
+    builder.button(
+        text="Импорт данных",
+        callback_data=SettingsCallback(action="import_data_menu").pack(),
+    )
     builder.adjust(2)
+    return builder.as_markup()
+
+
+def create_import_urls_menu():
+    builder = InlineKeyboardBuilder()
+    builder.button(
+        text="Быстрый импорт",
+        callback_data=SettingsCallback(action="import_urls_fast").pack(),
+    )
+    builder.button(
+        text="Детальный импорт",
+        callback_data=SettingsCallback(action="import_urls_detailed").pack(),
+    )
+    builder.button(
+        text="Назад", callback_data=SettingsCallback(action="settings").pack()
+    )
+    builder.adjust(2, 1)
+    return builder.as_markup()
+
+
+def create_import_data_menu():
+    builder = InlineKeyboardBuilder()
+    builder.button(
+        text="Быстрый импорт",
+        callback_data=SettingsCallback(action="import_data_fast").pack(),
+    )
+    builder.button(
+        text="Детальный импорт",
+        callback_data=SettingsCallback(action="import_data_detailed").pack(),
+    )
+    builder.button(
+        text="Назад", callback_data=SettingsCallback(action="settings").pack()
+    )
+    builder.adjust(2, 1)
     return builder.as_markup()

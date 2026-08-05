@@ -70,10 +70,10 @@ class ResourceNotFoundError(ReprMixinError, ParseError):
     video_id: str
     source: Optional[str]
 
-    def __init__(self, id: str, source: str | None = None) -> None:
-        self.id = id
+    def __init__(self, resource_id: str, source: str | None = None) -> None:
+        self.resource_id = resource_id
         self.source = source
-        msg = f"Ресурс с ID {id} не найдено"
+        msg = f"Ресурс с ID {resource_id} не найдено"
         if source:
             msg += f" (источник: {source})"
         super().__init__(msg)

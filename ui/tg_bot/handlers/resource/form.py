@@ -1,3 +1,5 @@
+import logging
+
 from aiogram import types
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
@@ -11,6 +13,8 @@ from ui.tg_bot.callbacks.resource import (
     get_callback_data,
     pack_callback_data_list,
 )
+from ui.tg_bot.handlers.resource.import_data import _start_next_resource_from_callback
+from ui.tg_bot.handlers.resource.import_urls import _start_next_url_from_callback
 from ui.tg_bot.keyboards.resource import create_kb_tags, create_kb_type
 from ui.tg_bot.states.resource import ResourceState
 from ui.tg_bot.utils.message import get_editable_message, with_action_label
@@ -22,14 +26,15 @@ async def handle_form_actions(
     state: FSMContext,
     resource_db: ResourceDB,
     message: types.Message,
+    logger: logging.Logger,
 ):
     action = callback_data.action
 
     if action == "save":
-        await _handle_save(callback, state, resource_db, message)
+        await _handle_save(callback, state, resource_db, message, logger)
 
     elif action == "cancel":
-        await _handle_cancel(callback, state, message)
+        await _handle_cancel(callback, state, resource_db, message, logger)
 
     elif action == "apply_new_tags":
         await _handle_apply_new_tags(callback, state)
@@ -55,12 +60,7 @@ async def handle_form_actions(
         await _show_edit_menu(callback, state, message)
 
 
-async def _handle_save(
-    callback: types.CallbackQuery,
-    state: FSMContext,
-    resource_db: ResourceDB,
-    message: types.Message,
-):
+async def _handle_save(callback, state, resource_db, message, logger):
     data = await state.get_data()
     resource = data["resource"]
     is_edit = data.get("edit_mode", False)
@@ -96,16 +96,89 @@ async def _handle_save(
     except DuplicateResourceError:
         msg = "Ресурс с такой ссылкой уже существует"
 
+    if "import_urls" in data:
+        results = data["import_results"]
+        results["count"] += 1
+        index = data["import_index"] + 1
+        await state.update_data(import_index=index, import_results=results)
+
+        if index >= len(data["import_urls"]):
+            msg = f"Импортировано {results['count']} из {len(data['import_urls'])} ссылок."
+            if results["errors"]:
+                msg += "\n\nОшибки:\n" + "\n".join(results["errors"][-10:])
+            await state.clear()
+            await message.edit_text(msg, disable_web_page_preview=True)
+            return
+
+        await _start_next_url_from_callback(callback, state, resource_db, logger, index)
+        return
+
+    elif "import_resources" in data:
+        results = data["import_results"]
+        results["count"] += 1
+        index = data["import_index"] + 1
+        await state.update_data(import_index=index, import_results=results)
+
+        if index >= len(data["import_resources"]):
+            msg = f"Импортировано {results['count']} из {len(data['import_resources'])} ресурсов."
+            if results["errors"]:
+                msg += "\n\nОшибки:\n" + "\n".join(results["errors"][-10:])
+            await state.clear()
+            await message.edit_text(msg, disable_web_page_preview=True)
+            return
+
+        await _start_next_resource_from_callback(
+            callback, state, resource_db, logger, index
+        )
+        return
+
     await state.clear()
     await message.edit_text(msg)
 
 
-async def _handle_cancel(
-    callback: types.CallbackQuery,
-    state: FSMContext,
-    message: types.Message,
-):
+async def _handle_cancel(callback, state, resource_db, message, logger):
     data = await state.get_data()
+
+    if "import_urls" in data:
+        results = data["import_results"]
+        results["errors"].append(
+            f"Пропущено: {data['import_urls'][data['import_index']]}"
+        )
+        index = data["import_index"] + 1
+        await state.update_data(import_index=index, import_results=results)
+
+        if index >= len(data["import_urls"]):
+            msg = f"Импортировано {results['count']} из {len(data['import_urls'])} ссылок."
+            if results["errors"]:
+                msg += "\n\nОшибки:\n" + "\n".join(results["errors"][-10:])
+            await state.clear()
+            await message.edit_text(msg, disable_web_page_preview=True)
+            return
+
+        await _start_next_url_from_callback(callback, state, resource_db, logger, index)
+        return
+
+    elif "import_resources" in data:
+        results = data["import_results"]
+        results["errors"].append(
+            f"Пропущено: {data['import_resources'][data['import_index']].title}"
+        )
+        index = data["import_index"] + 1
+        await state.update_data(import_index=index, import_results=results)
+
+        if index >= len(data["import_resources"]):
+            msg = f"Импортировано {results['count']} из {len(data['import_resources'])} ресурсов."
+            if results["errors"]:
+                msg += "\n\nОшибки:\n" + "\n".join(results["errors"][-10:])
+            await state.clear()
+            await message.edit_text(msg, disable_web_page_preview=True)
+            return
+
+        await _start_next_resource_from_callback(
+            callback, state, resource_db, logger, index
+        )
+        return
+
     is_edit = data.get("edit_mode", False)
 
     if is_edit:
@@ -115,7 +188,6 @@ async def _handle_cancel(
             f"{hbold('Добавление отменено')}\n\n"
             "Ресурс не сохранён. Чтобы начать заново, используйте /add"
         )
-
     await state.clear()
     await message.edit_text(msg)
 
@@ -160,7 +232,7 @@ async def _handle_change_field(
         )
 
     elif action == "change_status":
-        await state.set_state(ResourceState.waiting_for_save)  # временно
+        await state.set_state(ResourceState.waiting_for_save)
         await message.edit_text(
             with_action_label("edit", "Выберите новый статус:", data.get("title", "")),
             reply_markup=create_kb_type(list(ResourceStatus), get_callback_data),

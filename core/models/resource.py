@@ -348,6 +348,10 @@ class Resource(BaseModel):
     def _is_valid_url(url: str) -> bool:
         try:
             parsed = urlparse(url)
-            return bool(parsed.scheme and parsed.netloc and len(url) <= MAX_URL_LENGTH)
+            return bool(
+                parsed.scheme in ("http", "https")
+                and parsed.netloc
+                and len(url) <= MAX_URL_LENGTH
+            )
         except Exception:
             return False

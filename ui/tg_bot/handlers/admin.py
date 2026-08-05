@@ -15,7 +15,7 @@ async def cmd_start(message: types.Message):
     if message.from_user is None:
         return
     user = message.from_user
-    name = user.full_name or user.first_name if user else ""
+    name = user.full_name or user.first_name
     await message.answer(
         f"Привет админ {name}", reply_markup=get_admin_start_keyboard()
     )

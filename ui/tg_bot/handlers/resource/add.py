@@ -207,6 +207,7 @@ async def process_save_or_edit(
     callback_data: ResourceCallback,
     state: FSMContext,
     resource_db: ResourceDB,
+    logger: logging.Logger,
 ):
     message = get_editable_message(callback)
     if message is None:
@@ -242,6 +243,7 @@ async def process_save_or_edit(
         state=state,
         resource_db=resource_db,
         message=message,
+        logger=logger,
     )
 
 

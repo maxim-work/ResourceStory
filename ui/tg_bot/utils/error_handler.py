@@ -1,7 +1,7 @@
 import logging
-from typing import Any
+from typing import Any, Optional
 
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, Message
 
 from core.exceptions import (
     APIResponseError,
@@ -29,14 +29,16 @@ SYSTEM_ERRORS = (
 
 
 async def handle_resource_error(
-    callback: CallbackQuery,
     error: Exception,
     context: dict[str, Any],
     logger: logging.Logger,
     with_action_label,
     action: str = "error_add",
+    callback: Optional[CallbackQuery] = None,
+    message: Optional[Message] = None,
 ) -> bool:
-    message = get_editable_message(callback)
+    if message is None and callback is not None:
+        message = get_editable_message(callback)
     if message is None:
         return False
 
@@ -57,4 +59,12 @@ async def handle_resource_error(
         )
         return True
 
-    return False
+    logger.error(
+        f"Неизвестная ошибка: {type(error).__name__}",
+        exc_info=True,
+        extra=context,
+    )
+    await message.edit_text(
+        with_action_label(action, "Ошибка сервиса. Мы уже работаем над этим.")
+    )
+    return True
