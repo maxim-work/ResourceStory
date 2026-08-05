@@ -2,6 +2,7 @@ import asyncio
 from typing import Optional
 
 from aiogram import Bot
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from aiogram.utils.markdown import hbold
 
@@ -54,3 +55,15 @@ def get_editable_message(callback: CallbackQuery) -> Message | None:
     if isinstance(callback.message, Message):
         return callback.message
     return None
+
+
+async def cleanup_previous_message(
+    message: Message, state: FSMContext, bot: Bot
+) -> None:
+    data = await state.get_data()
+    prompt_msg_id = data.get("prompt_msg_id")
+    if prompt_msg_id:
+        try:
+            await bot.delete_message(message.chat.id, prompt_msg_id)
+        except Exception:
+            pass

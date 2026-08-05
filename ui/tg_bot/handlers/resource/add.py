@@ -22,6 +22,7 @@ from ui.tg_bot.utils.error_handler import handle_resource_error
 from ui.tg_bot.utils.fsm import exit_fsm
 from ui.tg_bot.utils.message import (
     auto_delete,
+    cleanup_previous_message,
     get_editable_message,
     safe_delete_many,
     with_action_label,
@@ -34,7 +35,9 @@ add_router = Router()
 
 @add_router.message(Command("add"))
 @add_router.message(F.text == "Добавить ресурс")
-async def cmd_add(message: types.Message, state: FSMContext) -> None:
+async def cmd_add(message: types.Message, state: FSMContext, bot: Bot) -> None:
+    await cleanup_previous_message(message, state, bot)
+    await state.clear()
     await state.set_state(ResourceState.waiting_for_link)
     await message.delete()
     prompt_msg = await message.answer(

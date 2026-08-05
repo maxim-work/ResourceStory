@@ -13,6 +13,7 @@ class RegistrationMiddleware(BaseMiddleware):
     async def __call__(self, handler, event, data):
         if not isinstance(event, Update):
             return await handler(event, data)
+        data["user_db"] = self.user_db
         real_event = get_real_event(event)
         if isinstance(real_event, (Message, CallbackQuery)) and real_event.from_user:
             if self.user_db.get(real_event.from_user.id) is None:

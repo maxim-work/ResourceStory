@@ -1,4 +1,4 @@
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
@@ -9,7 +9,7 @@ from config import RESOURCES_PER_PAGE
 from ui.tg_bot.callbacks.resource import ResourceCallback
 from ui.tg_bot.keyboards.resource import create_list_keyboard
 from ui.tg_bot.states.resource import ResourceState
-from ui.tg_bot.utils.message import get_editable_message
+from ui.tg_bot.utils.message import cleanup_previous_message, get_editable_message
 
 from .form import _show_save_summary
 
@@ -32,7 +32,8 @@ def _format_resource_detail(r) -> str:
 
 @list_router.message(Command("list"))
 @list_router.message(F.text == "Мои ресурсы")
-async def cmd_list(message: Message, state: FSMContext, resource_db):
+async def cmd_list(message: Message, state: FSMContext, resource_db, bot: Bot):
+    await cleanup_previous_message(message, state, bot)
     await state.clear()
     if message.from_user is None:
         return
@@ -46,10 +47,11 @@ async def cmd_list(message: Message, state: FSMContext, resource_db):
     total_pages = (len(resources) + RESOURCES_PER_PAGE - 1) // RESOURCES_PER_PAGE
     page_resources = resources[:RESOURCES_PER_PAGE]
 
-    await message.answer(
+    prompt_msg = await message.answer(
         _render_resource_list(page_resources, 1, total_pages),
         reply_markup=create_list_keyboard(page_resources, 1, total_pages),
     )
+    await state.update_data(prompt_msg_id=prompt_msg.message_id)
 
 
 @list_router.callback_query(ResourceCallback.filter())

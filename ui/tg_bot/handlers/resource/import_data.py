@@ -12,7 +12,7 @@ from ui.tg_bot.callbacks.resource import pack_callback_data_list
 from ui.tg_bot.keyboards.resource import create_kb_tags
 from ui.tg_bot.states.resource import ResourceState
 from ui.tg_bot.utils.error_handler import handle_resource_error
-from ui.tg_bot.utils.message import with_action_label
+from ui.tg_bot.utils.message import cleanup_previous_message, with_action_label
 
 import_data_router = Router()
 
@@ -31,6 +31,8 @@ async def process_import_data(
     data = await state.get_data()
     mode = data.get("import_mode", "fast")
     tg_id = message.from_user.id
+    await cleanup_previous_message(message, state, bot)
+    await state.clear()
 
     status_msg = await message.answer("Скачиваю файл...")
 
@@ -48,7 +50,6 @@ async def process_import_data(
     await status_msg.edit_text("Обрабатываю данные...")
 
     resources = parse_data(dest)
-
     if mode == "fast":
         try:
             count, total, errors = resource_db.import_data(resources, tg_id)
@@ -69,7 +70,9 @@ async def process_import_data(
         if errors:
             msg += "\n\nОшибки:\n" + "\n".join(errors[-10:])
         await status_msg.edit_text(msg, disable_web_page_preview=True)
+
         await state.clear()
+        await state.update_data(prompt_msg_id=status_msg.message_id)
 
     elif mode == "detailed":
         await state.update_data(
@@ -134,7 +137,6 @@ async def _start_next_resource_from_callback(
     logger: logging.Logger,
     index: int,
 ):
-    """Вызывается из form.py при сохранении/отмене в режиме детального импорта данных."""
     data = await state.get_data()
     resources = data["import_resources"]
     total = len(resources)

@@ -13,7 +13,7 @@ from data.service_db import ResourceDB
 from ui.tg_bot.callbacks.resource import get_callback_data
 from ui.tg_bot.keyboards.resource import create_kb_type
 from ui.tg_bot.states.resource import ResourceState
-from ui.tg_bot.utils.message import with_action_label
+from ui.tg_bot.utils.message import cleanup_previous_message, with_action_label
 
 import_urls_router = Router()
 
@@ -47,7 +47,15 @@ async def process_import_file(
         text = f.read()
 
     await status_msg.edit_text("Обрабатываю ссылки...")
-    await _handle_urls_text(message, state, resource_db, logger, text, status_msg)
+    await _handle_urls_text(
+        message=message,
+        state=state,
+        resource_db=resource_db,
+        logger=logger,
+        text=text,
+        bot=bot,
+        status_msg=status_msg,
+    )
 
 
 @import_urls_router.message(ResourceState.waiting_for_import_urls, F.text)
@@ -56,6 +64,7 @@ async def process_import_text(
     state: FSMContext,
     resource_db: ResourceDB,
     logger: logging.Logger,
+    bot: Bot,
 ):
     if message.from_user is None:
         return
@@ -64,7 +73,13 @@ async def process_import_text(
 
     status_msg = await message.answer("Обрабатываю ссылки...")
     await _handle_urls_text(
-        message, state, resource_db, logger, message.text, status_msg
+        message=message,
+        state=state,
+        resource_db=resource_db,
+        logger=logger,
+        text=message.text,
+        bot=bot,
+        status_msg=status_msg,
     )
 
 
@@ -74,6 +89,7 @@ async def _handle_urls_text(
     resource_db: ResourceDB,
     logger: logging.Logger,
     text: str,
+    bot: Bot,
     status_msg: Optional[Message] = None,
 ):
     urls = [line.strip() for line in text.split("\n") if line.strip()]
@@ -87,7 +103,9 @@ async def _handle_urls_text(
 
     data = await state.get_data()
     mode = data.get("import_mode", "fast")
-
+    await cleanup_previous_message(message, state, bot)
+    await state.clear()
+    prompt_msg = None
     if mode == "fast":
         count = 0
         errors = []
@@ -116,10 +134,9 @@ async def _handle_urls_text(
         if errors:
             msg += "\n\nОшибки:\n" + "\n".join(errors[-10:])
         if status_msg:
-            await status_msg.edit_text(msg, disable_web_page_preview=True)
+            prompt_msg = await status_msg.edit_text(msg, disable_web_page_preview=True)
         else:
-            await message.answer(msg, disable_web_page_preview=True)
-        await state.clear()
+            prompt_msg = await message.answer(msg, disable_web_page_preview=True)
 
     elif mode == "detailed":
         await state.update_data(
@@ -128,6 +145,8 @@ async def _handle_urls_text(
             import_results={"count": 0, "errors": []},
         )
         await _start_next_url(message, state, resource_db, logger, status_msg)
+    if prompt_msg is Message:
+        await state.update_data(prompt_msg_id=prompt_msg.message_id)
 
 
 async def _start_next_url(

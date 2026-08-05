@@ -1,4 +1,4 @@
-from aiogram import F, Router, types
+from aiogram import Bot, F, Router, types
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
@@ -11,18 +11,25 @@ from ui.tg_bot.callbacks.resource import SearchCallback
 from ui.tg_bot.keyboards.resource import create_search_keyboard
 from ui.tg_bot.states.resource import ResourceState
 from ui.tg_bot.utils.fsm import exit_fsm
-from ui.tg_bot.utils.message import get_editable_message, with_action_label
+from ui.tg_bot.utils.message import (
+    cleanup_previous_message,
+    get_editable_message,
+    with_action_label,
+)
 
 search_router = Router()
 
 
 @search_router.message(Command("search"))
 @search_router.message(F.text == "Поиск")
-async def cmd_search(message: Message, state: FSMContext):
+async def cmd_search(message: Message, state: FSMContext, bot: Bot):
+    await cleanup_previous_message(message, state, bot)
+    await state.clear()
     await state.set_state(ResourceState.waiting_for_search)
-    await message.answer(
+    prompt_msg = await message.answer(
         with_action_label("edit", "Введите ключевые слова для поиска:")
     )
+    await state.update_data(prompt_msg_id=prompt_msg.message_id)
 
 
 @search_router.message(ResourceState.waiting_for_search)

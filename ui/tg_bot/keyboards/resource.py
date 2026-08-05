@@ -142,6 +142,10 @@ def create_settings_menu():
         text="Импорт данных",
         callback_data=SettingsCallback(action="import_data_menu").pack(),
     )
+    builder.button(
+        text="Удаление",
+        callback_data=SettingsCallback(action="delete").pack(),
+    )
     builder.adjust(2)
     return builder.as_markup()
 
@@ -177,4 +181,21 @@ def create_import_data_menu():
         text="Назад", callback_data=SettingsCallback(action="settings").pack()
     )
     builder.adjust(2, 1)
+    return builder.as_markup()
+
+
+def create_del_import():
+    builder = InlineKeyboardBuilder()
+    builder.button(
+        text="Удаление всех ресурсов",
+        callback_data=SettingsCallback(action="del_all_resources").pack(),
+    )
+    builder.button(
+        text="Удаление аккаунта",
+        callback_data=SettingsCallback(action="del_account").pack(),
+    )
+    builder.button(
+        text="Назад", callback_data=SettingsCallback(action="settings").pack()
+    )
+    builder.adjust(1, 1, 1)
     return builder.as_markup()
